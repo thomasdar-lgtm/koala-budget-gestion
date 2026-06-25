@@ -1,8 +1,10 @@
-const CACHE_NAME = 'kbg-v2';
+const CACHE_NAME = 'kbg-v14';
 const ASSETS = [
-  './',
-  './index.html',
-  './manifest.json'
+  '/koala-budget-gestion/',
+  '/koala-budget-gestion/index.html',
+  '/koala-budget-gestion/manifest.json',
+  '/koala-budget-gestion/icons/icon-192.png',
+  '/koala-budget-gestion/icons/icon-512.png'
 ];
 
 self.addEventListener('install', e => {
