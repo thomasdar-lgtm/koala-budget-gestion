@@ -6,7 +6,7 @@
   "scope": "/koala-budget-gestion/",
   "display": "standalone",
   "background_color": "#0f1117",
-  "theme_color": "#6c63ff",
+  "theme_color": "#0f1117",
   "orientation": "portrait",
   "icons": [
     {
