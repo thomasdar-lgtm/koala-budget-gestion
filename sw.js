@@ -1,4 +1,4 @@
-const CACHE_VERSION = '1.72';
+const CACHE_VERSION = '1.73';
 const CACHE_NAME = 'kbg-v' + CACHE_VERSION;
 const ASSETS = ['./', './index.html', './manifest.json', './icons/icon-192.png', './icons/icon-512.png'];
 
