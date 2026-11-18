@@ -1,6 +1,6 @@
-const CACHE_VERSION = '1.82';
+const CACHE_VERSION = '1.83';
 const CACHE_NAME = 'kbg-v' + CACHE_VERSION;
-const ASSETS = ['./', './index.html', './manifest.json', './icons/icon-192.png', './icons/icon-512.png'];
+const ASSETS = ['./', './index.html', './manifest.json', './icons/icon-192.png', './icons/icon-512.png', './chart.umd.min.js'];
 
 /* mise en cache un par un : un fichier manquant ne bloque plus l'installation */
 self.addEventListener('install', e => {
