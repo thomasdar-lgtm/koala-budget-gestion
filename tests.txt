@@ -1,0 +1,1 @@
+<testsuite name="com.koala.kbg.StoreTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-11-18T15:20:43.168Z" hostname="ip-10-0-142-19" time="0.095">
