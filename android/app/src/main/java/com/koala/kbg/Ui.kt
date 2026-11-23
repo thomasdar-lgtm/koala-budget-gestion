@@ -178,7 +178,7 @@ fun IconBox(cat: String, sens: String, box: Dp = 36.dp) {
 
 /** ligne d'opération */
 @Composable
-fun TxRow(s: St, t: Tx, onClick: () -> Unit) {
+fun TxRow(s: St, t: Tx, pointage: Boolean = true, onClick: () -> Unit) {
     val c = Logic.cat(s, t)
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         IconBox(c, t.sens)
@@ -187,6 +187,20 @@ fun TxRow(s: St, t: Tx, onClick: () -> Unit) {
             T("$c · ${Logic.fmtD(t.date)}", 11.5.sp, K.Tx2, lines = 1)
         }
         T((if (t.sens == CREDIT) "+" else "-") + Logic.fmt(t.montant), 14.sp, if (t.sens == CREDIT) K.Gr else K.Re, FontWeight.Bold)
+        if (pointage) { Spacer(Modifier.width(10.dp)); Pointe(t) }
+    }
+}
+
+/** rond de pointage : ✓ vert = vue sur le relevé bancaire */
+@Composable
+fun Pointe(t: Tx) {
+    val on = t.pointe == true
+    Box(Modifier.size(34.dp).clip(androidx.compose.foundation.shape.CircleShape).clickable { Db.edit { Logic.togglePointe(it, t.id) } },
+        contentAlignment = Alignment.Center) {
+        Box(Modifier.size(20.dp).clip(androidx.compose.foundation.shape.CircleShape).background(if (on) K.Gr else Color.Transparent)
+            .border(1.5.dp, if (on) K.Gr else K.Tx3, androidx.compose.foundation.shape.CircleShape), contentAlignment = Alignment.Center) {
+            if (on) T("✓", 11.sp, K.Bg, FontWeight.Bold)
+        }
     }
 }
 

@@ -153,6 +153,7 @@ fun OpsScreen() {
     val s = Db.s; val ym = Nav.opYM
     var sens by rememberSaveable { mutableStateOf("all") }
     var type by rememberSaveable { mutableStateOf("all") }
+    var nonPt by rememberSaveable { mutableStateOf(false) }
     val q = Nav.opQ
     BackHandler(enabled = q != null) { Nav.opQ = null }
     Page {
@@ -167,8 +168,21 @@ fun OpsScreen() {
         Seg(listOf("all" to "Toutes", "classic" to "Classiques", "rec" to "Récurrentes"), type) { type = it }
         MonthNav(ym) { Nav.opYM = it }
         val done = Logic.done(s, ym)
-        val classic = if (type == "rec") emptyList() else s.tx.filter { it.mois == ym && it.type != "rec" && (sens == "all" || it.sens == sens) }
-        val recs = if (type == "classic") emptyList() else Logic.recsOf(s, ym).filter { sens == "all" || it.sens == sens }
+        // pointage : ce qui n'est pas encore vu sur le relevé
+        val ap = Logic.aPointer(s, ym, Db.today)
+        if (ap.isNotEmpty() || nonPt) {
+            val tot = ap.sumOf { it.signe }
+            Row(Modifier.fillMaxWidth().padding(bottom = 10.dp).clip(RoundedCornerShape(10.dp)).background(if (nonPt) K.Ac.copy(alpha = 0.18f) else K.Sf)
+                .clickable { nonPt = !nonPt }.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                T("◯ À pointer : ${ap.size}", 12.5.sp, K.Tx, FontWeight.SemiBold)
+                T(" · " + (if (tot >= 0) "+" else "-") + Logic.fmt(tot), 12.5.sp, K.Tx2, modifier = Modifier.weight(1f))
+                T(if (nonPt) "Tout voir" else "Voir seulement", 12.sp, K.Ac, FontWeight.Bold)
+            }
+        }
+        val apIds = ap.map { it.id }.toSet()
+        val classic = if (type == "rec") emptyList() else s.tx.filter { it.mois == ym && it.type != "rec" && (sens == "all" || it.sens == sens) && (!nonPt || it.id in apIds) }
+        val recs = if (type == "classic") emptyList() else Logic.recsOf(s, ym).filter { r -> (sens == "all" || r.sens == sens) &&
+            (!nonPt || Logic.recTxOf(s, r, ym)?.id?.let { it in apIds } == true) }
         Card(pad = 12.dp) {
             if (classic.isEmpty() && recs.isEmpty()) Empty("📋", "Aucune opération")
             classic.forEachIndexed { i, t ->
@@ -226,6 +240,8 @@ private fun RecRow(s: St, r: Rec, ym: String, isDone: Boolean) {
             T((if (r.sens == CREDIT) "+" else "-") + Logic.fmt(mt), 14.sp, if (r.sens == CREDIT) K.Gr else K.Re, FontWeight.Bold)
             T(" ✎", 11.sp, K.Tx3)
         }
+        Spacer(Modifier.width(10.dp))
+        if (rt != null) Pointe(rt) else Spacer(Modifier.width(34.dp))
     }
 }
 

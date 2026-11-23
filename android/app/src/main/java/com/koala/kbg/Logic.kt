@@ -286,6 +286,16 @@ object Logic {
         )
     }
 
+    // ── pointage ────────────────────────────────────────────
+    fun togglePointe(s: St, id: Long): St =
+        s.copy(tx = s.tx.map { if (it.id == id) it.copy(pointe = if (it.pointe == true) null else true) else it })
+
+    /** opérations du mois pas encore vues sur le relevé (jusqu'à aujourd'hui) */
+    fun aPointer(s: St, ym: String, today: LocalDate): List<Tx> {
+        val td = ds(today)
+        return s.tx.filter { it.mois == ym && it.pointe != true && it.date <= td }
+    }
+
     // ── recherche ───────────────────────────────────────────
     private fun plain(x: String) = java.text.Normalizer.normalize(x, java.text.Normalizer.Form.NFD)
         .replace(Regex("\\p{Mn}+"), "").lowercase().trim()

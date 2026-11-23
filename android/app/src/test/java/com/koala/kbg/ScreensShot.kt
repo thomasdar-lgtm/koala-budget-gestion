@@ -47,7 +47,10 @@ class ScreensShot {
         )
         s = Logic.saveCredit(s, Cred("c1", "Crédit Dispo", 10000.0, 6.0, 60, 0.0, "2026-12", 5), 1)
         s = Logic.saveCredit(s, Cred("c2", "Auto", 15000.0, 4.5, 48, 0.0, "2024-03", 10), 2)
-        return Logic.autoCheckRec(s, day)
+        s = Logic.autoCheckRec(s, day)
+        s = Logic.togglePointe(s, 1); s = Logic.togglePointe(s, 3)
+        s.tx.find { it.libelle == "Loyer" }?.let { s = Logic.togglePointe(s, it.id) }
+        return s
     }
 
     @Composable

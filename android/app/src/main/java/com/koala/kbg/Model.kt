@@ -22,6 +22,7 @@ data class Tx(
     val displayMonth: String? = null,     // mois de rattachement (sinon le mois de la date)
     val recId: String? = null,
     val carte: Boolean? = null,           // dépense payée par carte à débit différé (null = oui)
+    val pointe: Boolean? = null,          // vue sur le relevé bancaire
 ) {
     val mois: String get() = displayMonth ?: date.take(7)
     val signe: Double get() = if (sens == CREDIT) montant else -montant
@@ -100,6 +101,7 @@ object Json {
                     displayMonth = t.str("display_month"),
                     recId = t.str("recId"),
                     carte = if (t.has("carte") && !t.isNull("carte")) t.optBoolean("carte") else null,
+                    pointe = if (t.optBoolean("pointe", false)) true else null,
                 )
             }
         }
@@ -156,6 +158,7 @@ object Json {
                     t.displayMonth?.let { put("display_month", it) }
                     t.recId?.let { put("recId", it) }
                     t.carte?.let { put("carte", it) }
+                    if (t.pointe == true) put("pointe", true)
                 })
             }
         })

@@ -155,4 +155,18 @@ class LogicTest {
         assertEquals(1, b.buds.count { it.sp > it.bud }); assertNull(b.soldeFin)
         assertTrue(Logic.bilan(s, "2026-10", LocalDate.of(2027, 1, 3)).vide)
     }
+
+    @Test fun pointage() {
+        var s = St(tx = listOf(
+            Tx(1, "2026-12-02", "Leclerc", 86.4, "Alimentation", DEBIT),
+            Tx(2, "2026-12-08", "Vente", 45.0, "Revenus Autres", CREDIT),
+            Tx(3, "2026-12-28", "Futur", 10.0, "Divers", DEBIT),
+        ))
+        val d = LocalDate.of(2026, 12, 18)
+        assertEquals(listOf(1L, 2L), Logic.aPointer(s, "2026-12", d).map { it.id })
+        s = Logic.togglePointe(s, 1)
+        assertEquals(listOf(2L), Logic.aPointer(s, "2026-12", d).map { it.id })
+        assertEquals(true, Json.parse(Json.write(s)).tx[0].pointe); assertNull(Json.parse(Json.write(s)).tx[1].pointe)
+        s = Logic.togglePointe(s, 1); assertNull(s.tx[0].pointe)
+    }
 }
