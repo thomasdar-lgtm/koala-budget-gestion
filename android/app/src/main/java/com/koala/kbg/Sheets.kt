@@ -56,7 +56,7 @@ fun SheetHost() {
                     Sheet.Solde -> SoldeSheet()
                     Sheet.Budgets -> BudgetsSheet()
                     Sheet.Backups -> BackupsSheet()
-                    Sheet.AddTx -> AddTxSheet()
+                    is Sheet.AddTx -> AddTxSheet(sh.sens)
                     is Sheet.EditTx -> EditTxSheet(sh.id)
                     is Sheet.RecEdit -> RecEditSheet(sh.id)
                     is Sheet.RecMonth -> RecMonthSheet(sh.rid, sh.ym)
@@ -199,9 +199,9 @@ private fun bkLabel(b: Store.Info): Pair<String, String> {
 
 // ═══ NOUVELLE OPÉRATION ════════════════════════════════════
 @Composable
-internal fun AddTxSheet() {
+internal fun AddTxSheet(sens0: String = DEBIT) {
     val s = Db.s; val today = Db.today
-    var sens by remember { mutableStateOf(DEBIT) }
+    var sens by remember { mutableStateOf(sens0) }
     var amt by remember { mutableStateOf("") }
     var lib by remember { mutableStateOf("") }
     var date by remember { mutableStateOf(Logic.ds(today)) }

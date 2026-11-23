@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="depense"
+        android:enabled="true"
+        android:icon="@drawable/sc_dep"
+        android:shortcutShortLabel="@string/sc_dep"
+        android:shortcutLongLabel="@string/sc_dep">
+        <intent
+            android:action="com.koala.kbg.ADD_DEBIT"
+            android:targetPackage="com.koala.kbg"
+            android:targetClass="com.koala.kbg.MainActivity" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="entree"
+        android:enabled="true"
+        android:icon="@drawable/sc_rev"
+        android:shortcutShortLabel="@string/sc_rev"
+        android:shortcutLongLabel="@string/sc_rev">
+        <intent
+            android:action="com.koala.kbg.ADD_CREDIT"
+            android:targetPackage="com.koala.kbg"
+            android:targetClass="com.koala.kbg.MainActivity" />
+    </shortcut>
+</shortcuts>

@@ -1,5 +1,6 @@
 package com.koala.kbg
 
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import androidx.fragment.app.FragmentActivity
@@ -90,7 +91,7 @@ sealed class Sheet {
     data object Solde : Sheet()
     data object Budgets : Sheet()
     data object Backups : Sheet()
-    data object AddTx : Sheet()
+    data class AddTx(val sens: String = DEBIT) : Sheet()
     data class EditTx(val id: Long) : Sheet()
     data class RecEdit(val id: String?) : Sheet()
     data class RecMonth(val rid: String, val ym: String) : Sheet()
@@ -108,6 +109,17 @@ class MainActivity : FragmentActivity() {
         Db.init(this)
         if (Build.VERSION.SDK_INT >= 33) setRecentsScreenshotEnabled(!Lock.active(this))
         setContent { KbgTheme { KbgApp() } }
+        shortcut(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); shortcut(intent) }
+
+    /** appui long sur l'icône : Nouvelle dépense / Nouvelle entrée */
+    private fun shortcut(i: Intent?) {
+        if (i == null) return
+        val sens = when (i.action) { "com.koala.kbg.ADD_DEBIT" -> DEBIT; "com.koala.kbg.ADD_CREDIT" -> CREDIT; else -> return }
+        i.action = null
+        Nav.go("saisie"); Nav.open(Sheet.AddTx(sens))
     }
 
     override fun onStart() { super.onStart(); Lock.onStart(this) }
@@ -149,7 +161,7 @@ fun KbgApp() {
         }
         if (Nav.tab == "saisie") {
             Box(Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 18.dp, bottom = 84.dp)
-                .size(58.dp).clip(RoundedCornerShape(18.dp)).background(K.Ac).clickable { Nav.open(Sheet.AddTx) },
+                .size(58.dp).clip(RoundedCornerShape(18.dp)).background(K.Ac).clickable { Nav.open(Sheet.AddTx()) },
                 contentAlignment = Alignment.Center) { T("+", 30.sp, Color.White, FontWeight.Light) }
         }
         NotifHost(Modifier.align(Alignment.TopCenter))
