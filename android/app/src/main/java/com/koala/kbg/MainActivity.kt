@@ -1,7 +1,8 @@
 package com.koala.kbg
 
+import android.os.Build
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import androidx.fragment.app.FragmentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -93,7 +94,7 @@ sealed class Sheet {
     data class CreditEdit(val id: String?) : Sheet()
 }
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge(
@@ -101,8 +102,12 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.dark(K.Sf.toArgb()),
         )
         Db.init(this)
+        if (Build.VERSION.SDK_INT >= 33) setRecentsScreenshotEnabled(!Lock.active(this))
         setContent { KbgTheme { KbgApp() } }
     }
+
+    override fun onStart() { super.onStart(); Lock.onStart(this) }
+    override fun onStop() { super.onStop(); Lock.onStop() }
 }
 
 @Composable
@@ -146,6 +151,14 @@ fun KbgApp() {
         NotifHost(Modifier.align(Alignment.TopCenter))
     }
     SheetHost()
+    val act = androidx.compose.ui.platform.LocalContext.current as? FragmentActivity
+    LaunchedEffect(Lock.asks) { if (Lock.locked && act != null) Lock.prompt(act) }
+    if (Lock.locked) {
+        androidx.compose.ui.window.Dialog(onDismissRequest = { act?.moveTaskToBack(true) },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+            LockScreen { act?.let { Lock.prompt(it) } }
+        }
+    }
     Nav.ask?.let { a ->
         AlertDialog(
             onDismissRequest = { Nav.ask = null },

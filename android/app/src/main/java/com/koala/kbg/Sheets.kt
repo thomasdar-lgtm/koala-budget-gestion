@@ -82,6 +82,15 @@ internal fun MenuSheet() {
     MenuItem("Sauvegardes", "une par jour · 30 jours") { Nav.open(Sheet.Backups) }
     MenuItem("Partager une copie", "Drive, Gmail…") { runCatching { Db.shareCopy(ctx) }.onFailure { Nav.notify("Partage impossible", true) } }
     MenuItem("Importer", "fichier .json") { Nav.close(); Nav.importReq++ }
+    MenuSec("Sécurité")
+    var lockOn by remember { mutableStateOf(Lock.enabled(ctx)) }
+    val dispo = remember { Lock.available(ctx) }
+    MenuItem("Verrouillage par empreinte", if (!dispo) "indisponible" else if (lockOn) "activé ✓" else "désactivé") {
+        if (!dispo) { Nav.notify("Aucune empreinte ni code configuré sur ce téléphone", true); return@MenuItem }
+        lockOn = !lockOn; Lock.setEnabled(ctx, lockOn)
+        if (android.os.Build.VERSION.SDK_INT >= 33) (ctx as? android.app.Activity)?.setRecentsScreenshotEnabled(!lockOn)
+        Nav.notify(if (lockOn) "🔒 Verrouillage activé" else "Verrouillage désactivé")
+    }
     MenuSec("Mise à jour")
     MenuItem("Rechercher une mise à jour", majS) {
         majS = "recherche…"

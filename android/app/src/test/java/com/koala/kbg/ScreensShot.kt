@@ -78,5 +78,6 @@ class ScreensShot {
     @Test fun creditDetail() = shot("8_credit") { SheetFrame { CreditDetailSheet("c2") } }
     @Test fun creditEdit() = shot("9_credit_saisie") { SheetFrame { CreditEditSheet("c1") } }
     @Test fun recherche() { Nav.opQ = "leclerc"; shot("11_recherche", "saisie") { Frame { OpsScreen() } }; Nav.opQ = null }
+    @Test fun verrou() = shot("12_verrou") { KbgTheme { LockScreen { } } }
     @Test fun solde() = shot("10_solde") { SheetFrame { SoldeSheet() } }
 }
