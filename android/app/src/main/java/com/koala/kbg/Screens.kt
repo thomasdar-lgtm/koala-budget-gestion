@@ -67,6 +67,13 @@ fun HomeScreen() {
             val jr = jours - day + 1
             Kpi("Par jour", if (so.prev > 0) Logic.fmt(so.prev / jr) else "0 €", if (so.prev > 0) K.Tx else K.Re)
         }
+        // bilan du mois écoulé : les 7 premiers jours, jusqu'à fermeture
+        val pym = Logic.prevM(ym)
+        if (day <= 7 && (Nav.bilanVu ?: Db.pref("bilanVu")) != pym) {
+            val b = Logic.bilan(s, pym, today)
+            if (!b.vide) BilanCard(b, onOpen = { Nav.anTab = "bilan"; Nav.anYM = pym; Nav.go("analyse") },
+                onClose = { Nav.bilanVu = pym; Db.setPref("bilanVu", pym) })
+        }
         // prélèvements des 3 prochains jours
         val done = Logic.done(s, ym)
         val soon = Logic.recsOf(s, ym).filter { it.id !in done && it.sens == DEBIT && it.jour in day..(day + 3) }.sortedBy { it.jour }
@@ -95,6 +102,48 @@ fun HomeScreen() {
                 Spacer(Modifier.height(10.dp))
             }
         }
+    }
+}
+
+/** bilan d'un mois : entrées, sorties, solde, écarts par catégorie, budgets */
+@Composable
+fun BilanCard(b: Logic.Bilan, onOpen: (() -> Unit)? = null, onClose: (() -> Unit)? = null) {
+    Card(if (onOpen != null) Modifier.clickable(onClick = onOpen) else Modifier) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 10.dp)) {
+            T("📋 Bilan de ${Logic.fmtM(b.ym)}", 15.sp, K.Tx, FontWeight.ExtraBold, Modifier.weight(1f))
+            if (onClose != null) T("✕", 16.sp, K.Tx3, modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onClose).padding(6.dp))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 10.dp)) {
+            Column(Modifier.weight(1f)) { T("Entrées", 11.sp, K.Tx2); T("+" + Logic.fmt(b.rev), 14.sp, K.Gr, FontWeight.Bold) }
+            Column(Modifier.weight(1f)) { T("Sorties", 11.sp, K.Tx2); T("-" + Logic.fmt(b.dep), 14.sp, K.Re, FontWeight.Bold) }
+            Column(Modifier.weight(1f)) { T("Résultat", 11.sp, K.Tx2); T((if (b.net >= 0) "+" else "-") + Logic.fmt(b.net), 14.sp, if (b.net >= 0) K.Gr else K.Re, FontWeight.Bold) }
+        }
+        b.soldeFin?.let { KV("Solde en fin de mois", Logic.fmtS(it)) }
+        if (b.hausses.isNotEmpty()) {
+            T("En hausse", 11.sp, K.Tx2, FontWeight.SemiBold, Modifier.padding(top = 8.dp, bottom = 2.dp))
+            b.hausses.forEach { e -> EcartRow(e) }
+        }
+        if (b.baisses.isNotEmpty()) {
+            T("En baisse", 11.sp, K.Tx2, FontWeight.SemiBold, Modifier.padding(top = 8.dp, bottom = 2.dp))
+            b.baisses.forEach { e -> EcartRow(e) }
+        }
+        if (b.buds.isNotEmpty()) {
+            val over = b.buds.filter { it.sp > it.bud + 0.004 }
+            T("Budgets : ${b.buds.size - over.size} / ${b.buds.size} tenus", 12.5.sp, if (over.isEmpty()) K.Gr else K.Ye, FontWeight.Bold,
+                Modifier.padding(top = 10.dp))
+            over.forEach { o -> T("• ${o.cat} dépassé de ${Logic.fmt(o.sp - o.bud)}", 12.sp, K.Tx2) }
+        }
+        if (onOpen != null) T("Voir le détail ›", 12.sp, K.Ac, FontWeight.SemiBold, Modifier.padding(top = 10.dp))
+    }
+}
+
+@Composable
+private fun EcartRow(e: Logic.Ecart) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+        CatIcon(e.cat, 13.sp); Spacer(Modifier.width(6.dp))
+        T(e.cat, 12.5.sp, K.Tx, modifier = Modifier.weight(1f), lines = 1)
+        T(Logic.fmt(e.cur), 12.5.sp, K.Tx2)
+        T("  " + (if (e.diff > 0) "+" else "-") + Logic.fmt(e.diff), 12.5.sp, if (e.diff > 0) K.Re else K.Gr, FontWeight.Bold)
     }
 }
 

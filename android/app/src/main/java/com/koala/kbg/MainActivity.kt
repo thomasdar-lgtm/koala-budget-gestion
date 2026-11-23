@@ -65,6 +65,9 @@ object Nav {
     // mois affichés
     var opYM by mutableStateOf(Logic.ym(java.time.LocalDate.now()))
     var pokeYM by mutableStateOf(Logic.ym(java.time.LocalDate.now()))
+    var anTab by mutableStateOf("cat")
+    var anYM by mutableStateOf<String?>(null)
+    var bilanVu by mutableStateOf<String?>(null)
     var opQ by mutableStateOf<String?>(null)   // recherche dans Opérations (null = fermée)
 
     fun go(t: String) {

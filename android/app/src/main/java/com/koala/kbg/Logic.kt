@@ -257,6 +257,35 @@ object Logic {
         return s.copy(cred = s.cred.filter { it.id != id }, rec = s.rec.filter { it.id != c.recId })
     }
 
+    // ── bilan du mois ───────────────────────────────────────
+    data class Ecart(val cat: String, val cur: Double, val prev: Double) { val diff get() = cur - prev }
+    data class Bilan(
+        val ym: String, val rev: Double, val dep: Double, val nb: Int, val soldeFin: Double?,
+        val hausses: List<Ecart>, val baisses: List<Ecart>, val buds: List<Bud>,
+    ) {
+        val net get() = rev - dep
+        val vide get() = nb == 0
+    }
+
+    /** résumé d'un mois, comparé au mois d'avant (écarts de moins de 5 € ignorés) */
+    fun bilan(s: St, ym: String, today: LocalDate): Bilan {
+        val tx = s.tx.filter { it.mois == ym }
+        fun parCatAll(m: String): Map<String, Double> {
+            val r = HashMap<String, Double>()
+            s.tx.filter { it.mois == m && it.sens == DEBIT }.forEach { val c = cat(s, it); r[c] = (r[c] ?: 0.0) + it.montant }
+            return r
+        }
+        val cur = parCatAll(ym); val prev = parCatAll(prevM(ym))
+        val ec = (cur.keys + prev.keys).map { Ecart(it, cur[it] ?: 0.0, prev[it] ?: 0.0) }.filter { abs(it.diff) >= 5 }
+        return Bilan(
+            ym = ym, rev = r2(tx.filter { it.sens == CREDIT }.sumOf { it.montant }), dep = r2(tx.filter { it.sens == DEBIT }.sumOf { it.montant }),
+            nb = tx.size, soldeFin = soldeFinMois(s, ym, today),
+            hausses = ec.filter { it.diff > 0 }.sortedByDescending { it.diff }.take(3),
+            baisses = ec.filter { it.diff < 0 }.sortedBy { it.diff }.take(3),
+            buds = budList(s, ym),
+        )
+    }
+
     // ── recherche ───────────────────────────────────────────
     private fun plain(x: String) = java.text.Normalizer.normalize(x, java.text.Normalizer.Form.NFD)
         .replace(Regex("\\p{Mn}+"), "").lowercase().trim()

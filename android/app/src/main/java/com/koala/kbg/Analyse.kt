@@ -50,13 +50,14 @@ private val PAL = listOf(0xFF6C63FF, 0xFFFF6584, 0xFF4ECCA3, 0xFFFFD166, 0xFFA29
 
 @Composable
 fun AnalyseScreen() {
-    var tab by rememberSaveable { mutableStateOf("cat") }
+    val tab = Nav.anTab
     Page {
         Header("📊 Analyse")
-        Seg(listOf("cat" to "Catégories", "solde" to "Solde", "mois" to "Par mois", "histo" to "Histo"), tab) { tab = it }
+        Seg(listOf("cat" to "Catég.", "bilan" to "Bilan", "solde" to "Solde", "mois" to "Par mois", "histo" to "Histo"), tab) { Nav.anTab = it }
         Spacer(Modifier.height(6.dp))
         when (tab) {
             "cat" -> CatTab()
+            "bilan" -> BilanTab()
             "solde" -> SoldeTab()
             "mois" -> MoisTab()
             else -> HistoTab()
@@ -101,6 +102,14 @@ private fun CatTab() {
             }
         }
     }
+}
+
+@Composable
+private fun BilanTab() {
+    val ym = Nav.anYM ?: Logic.prevM(Logic.ym(Db.today))
+    MonthNav(ym) { Nav.anYM = it }
+    val b = Logic.bilan(Db.s, ym, Db.today)
+    if (b.vide) Card { Empty("📋", "Aucune opération ce mois") } else BilanCard(b)
 }
 
 @Composable

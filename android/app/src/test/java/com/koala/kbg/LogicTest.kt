@@ -138,4 +138,21 @@ class LogicTest {
         assertEquals(listOf(1L, 2L), Logic.search(s, "aliment").map { it.id }.sortedBy { it })
         assertTrue(Logic.search(s, "  ").isEmpty())
     }
+
+    @Test fun bilanDuMois() {
+        val s = St(tx = listOf(
+            Tx(1, "2026-11-04", "Leclerc", 140.0, "Alimentation", DEBIT),
+            Tx(2, "2026-11-20", "Display", 160.0, "Pokémon TCG", DEBIT),
+            Tx(3, "2026-12-02", "Leclerc", 230.0, "Alimentation", DEBIT),
+            Tx(4, "2026-12-05", "Lot", 20.0, "Pokémon TCG", DEBIT),
+            Tx(5, "2026-12-06", "Ciné", 3.0, "Loisirs & Culture", DEBIT),
+            Tx(6, "2026-12-01", "Salaire", 1800.0, "Revenus Salaire", CREDIT),
+        ), bud = mapOf("Alimentation" to 200.0, "Pokémon TCG" to 100.0))
+        val b = Logic.bilan(s, "2026-12", LocalDate.of(2027, 1, 3))
+        eq(1800.0, b.rev); eq(253.0, b.dep); eq(1547.0, b.net); assertEquals(6 - 2, b.nb)
+        assertEquals(listOf("Alimentation"), b.hausses.map { it.cat }); eq(90.0, b.hausses[0].diff)
+        assertEquals(listOf("Pokémon TCG"), b.baisses.map { it.cat }); eq(-140.0, b.baisses[0].diff)
+        assertEquals(1, b.buds.count { it.sp > it.bud }); assertNull(b.soldeFin)
+        assertTrue(Logic.bilan(s, "2026-10", LocalDate.of(2027, 1, 3)).vide)
+    }
 }

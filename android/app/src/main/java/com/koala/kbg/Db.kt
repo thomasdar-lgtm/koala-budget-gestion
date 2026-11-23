@@ -31,6 +31,10 @@ object Db {
         tick()
     }
 
+    /** réglages propres au téléphone (pas dans les données) */
+    fun pref(k: String): String? = if (::app.isInitialized) app.getSharedPreferences("kbg_prefs", Context.MODE_PRIVATE).getString(k, null) else null
+    fun setPref(k: String, v: String) { if (::app.isInitialized) app.getSharedPreferences("kbg_prefs", Context.MODE_PRIVATE).edit().putString(k, v).apply() }
+
     /** captures d'écran (tests) : état fixé, sans fichier */
     fun preview(st: St, day: LocalDate) { s = st; today = day }
 
