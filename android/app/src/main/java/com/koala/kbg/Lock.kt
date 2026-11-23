@@ -35,6 +35,7 @@ import androidx.fragment.app.FragmentActivity
 object Lock {
     private const val DELAI = 2 * 60 * 1000L
     var locked by mutableStateOf(false)
+    var prompting by mutableStateOf(false)   // fenêtre d'empreinte affichée : pas de bouton derrière
     var asks by mutableIntStateOf(0)          // chaque nouveau verrouillage relance la demande
     private var started = false
     private var stoppedAt = 0L
@@ -59,11 +60,13 @@ object Lock {
     fun prompt(act: FragmentActivity) {
         if (!locked) return
         val p = BiometricPrompt(act, ContextCompat.getMainExecutor(act), object : BiometricPrompt.AuthenticationCallback() {
-            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) { locked = false }
+            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) { prompting = false; locked = false }
+            override fun onAuthenticationError(errorCode: Int, errString: CharSequence) { prompting = false }
         })
         val b = BiometricPrompt.PromptInfo.Builder().setTitle("Déverrouiller KBG").setAllowedAuthenticators(auths())
         if (Build.VERSION.SDK_INT < 30) b.setNegativeButtonText("Annuler")
-        runCatching { p.authenticate(b.build()) }
+        prompting = true
+        runCatching { p.authenticate(b.build()) }.onFailure { prompting = false }
     }
 }
 
@@ -74,8 +77,11 @@ fun LockScreen(onUnlock: () -> Unit) {
         verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center) {
         Image(painterResource(R.drawable.logo), null, Modifier.size(96.dp).clip(RoundedCornerShape(22.dp)))
         Spacer(Modifier.height(18.dp))
-        T("KBG est verrouillé", 20.sp, K.Tx, FontWeight.ExtraBold)
-        T("Empreinte ou code du téléphone", 13.sp, K.Tx2, modifier = Modifier.padding(top = 4.dp, bottom = 26.dp), align = TextAlign.Center)
-        Btn("🔓 Déverrouiller", Modifier.padding(horizontal = 30.dp), onClick = onUnlock)
+        // pendant la fenêtre d'empreinte : juste le logo ; le bouton n'apparaît que si elle a été fermée
+        if (!Lock.prompting) {
+            T("KBG est verrouillé", 20.sp, K.Tx, FontWeight.ExtraBold)
+            T("Empreinte ou code du téléphone", 13.sp, K.Tx2, modifier = Modifier.padding(top = 4.dp, bottom = 26.dp), align = TextAlign.Center)
+            Btn("🔓 Déverrouiller", Modifier.padding(horizontal = 30.dp), onClick = onUnlock)
+        }
     }
 }

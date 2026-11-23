@@ -82,6 +82,7 @@ class ScreensShot {
     @Test fun creditEdit() = shot("9_credit_saisie") { SheetFrame { CreditEditSheet("c1") } }
     @Test fun recherche() { Nav.opQ = "leclerc"; shot("11_recherche", "saisie") { Frame { OpsScreen() } }; Nav.opQ = null }
     @Test fun verrou() = shot("12_verrou") { KbgTheme { LockScreen { } } }
+    @Test fun verrouEnCours() { Lock.prompting = true; shot("15_verrou_empreinte") { KbgTheme { LockScreen { } } }; Lock.prompting = false }
     @Test fun bilanAccueil() { Db.preview(sample(), LocalDate.of(2027, 1, 3)); Nav.tab = "home"; Nav.bilanVu = null; paparazzi.snapshot("13_bilan_accueil") { Frame { HomeScreen() } } }
     @Test fun bilanAnalyse() { Nav.anTab = "bilan"; Nav.anYM = "2026-12"; shot("14_bilan_analyse", "analyse") { Frame { AnalyseScreen() } }; Nav.anTab = "cat"; Nav.anYM = null }
     @Test fun solde() = shot("10_solde") { SheetFrame { SoldeSheet() } }
