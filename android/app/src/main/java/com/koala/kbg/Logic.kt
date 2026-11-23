@@ -1,0 +1,278 @@
+package com.koala.kbg
+
+import java.time.DayOfWeek
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.ZoneId
+import kotlin.math.abs
+import kotlin.math.pow
+import kotlin.math.roundToLong
+
+/** Calculs de KBG (repris à l'identique de la version web). Fonctions pures : l'état n'est jamais modifié sur place. */
+object Logic {
+
+    fun r2(x: Double): Double = Math.round(x * 100.0) / 100.0
+
+    // ── dates ───────────────────────────────────────────────
+    fun ds(d: LocalDate): String = d.toString()
+    fun ym(d: LocalDate): String = d.toString().take(7)
+    fun prevM(ym: String): String = YearMonth.parse(ym).minusMonths(1).toString()
+    fun nextM(ym: String): String = YearMonth.parse(ym).plusMonths(1).toString()
+    fun dim(ym: String): Int = YearMonth.parse(ym).lengthOfMonth()
+    fun dayOf(ym: String, jour: Int): String = ym + "-" + minOf(jour, dim(ym)).toString().padStart(2, '0')
+
+    private val MFU = listOf("Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre")
+    val MFR = listOf("Jan", "Fév", "Mar", "Avr", "Mai", "Jun", "Jul", "Aoû", "Sep", "Oct", "Nov", "Déc")
+    fun fmtM(ym: String): String = if (ym.length < 7) "" else MFU[ym.substring(5, 7).toInt() - 1] + " " + ym.take(4)
+    fun fmtD(d: String): String = if (d.length < 10) d else d.substring(8, 10) + "/" + d.substring(5, 7) + "/" + d.take(4)
+
+    /** 1 234,50 € (valeur absolue, comme la version web) */
+    fun fmt(n: Double): String {
+        val c = abs(n * 100).roundToLong()
+        val e = (c / 100).toString().reversed().chunked(3).joinToString(" ").reversed()
+        return e + "," + (c % 100).toString().padStart(2, '0') + " €"
+    }
+    /** avec le signe moins si négatif */
+    fun fmtS(n: Double): String = (if (n < -0.004) "-" else "") + fmt(n)
+
+    // ── catégories ──────────────────────────────────────────
+    fun cat(s: St, t: Tx): String = s.ovr[t.id.toString()] ?: t.categorie
+
+    // ── récurrentes ─────────────────────────────────────────
+    fun recOn(r: Rec, ym: String) = (r.debut == null || ym >= r.debut) && (r.fin == null || ym <= r.fin)
+    fun recsOf(s: St, ym: String) = s.rec.filter { recOn(it, ym) }
+    fun done(s: St, ym: String): List<String> = s.recDone[ym] ?: emptyList()
+    fun skipped(s: St, ym: String): List<String> = s.recSkip[ym] ?: emptyList()
+
+    fun recTxOf(s: St, r: Rec, ym: String): Tx? =
+        s.tx.find { it.type == "rec" && it.mois == ym && (it.recId == r.id || (it.recId == null && it.libelle == r.libelle)) }
+
+    /** montant prévu d'une récurrente pour un mois (échéance exacte pour un crédit) */
+    fun recAmt(s: St, r: Rec, ym: String): Double {
+        if (r.credId != null) {
+            val c = s.cred.find { it.id == r.credId }
+            if (c != null) crPlan(c).rows.find { it.ym == ym }?.let { return it.pay }
+        }
+        return r.montant
+    }
+
+    fun nextId(s: St): Long = (s.tx.maxOfOrNull { it.id } ?: 0) + 1
+
+    /** coche / décoche une récurrente pour un mois (crée ou supprime l'opération du mois) */
+    fun toggleRec(s: St, rid: String, ym: String): St {
+        val r = s.rec.find { it.id == rid } ?: return s
+        val d = done(s, ym)
+        return if (rid !in d) {
+            var tx = s.tx
+            if (recTxOf(s, r, ym) == null) {
+                tx = tx + Tx(
+                    id = nextId(s), date = dayOf(ym, r.jour), libelle = r.libelle, montant = recAmt(s, r, ym),
+                    categorie = r.categorie, sens = r.sens, type = "rec", displayMonth = ym, recId = r.id,
+                )
+            }
+            s.copy(tx = tx, recDone = s.recDone + (ym to d + rid))
+        } else {
+            s.copy(
+                tx = s.tx.filter { !(it.type == "rec" && it.mois == ym && (it.recId == r.id || (it.recId == null && it.libelle == r.libelle))) },
+                recDone = s.recDone + (ym to d - rid),
+            )
+        }
+    }
+
+    fun setRecSkip(s: St, rid: String, ym: String, skip: Boolean): St {
+        val a = skipped(s, ym)
+        val n = if (skip) (if (rid in a) a else a + rid) else a - rid
+        return s.copy(recSkip = s.recSkip + (ym to n))
+    }
+
+    /** case cochée à la main dans Opérations : décocher = « pas encore passée », l'auto-cochage la laisse tranquille */
+    fun toggleRecUser(s: St, rid: String, ym: String): St {
+        val t = toggleRec(s, rid, ym)
+        return setRecSkip(t, rid, ym, rid !in done(t, ym))
+    }
+
+    /** montant réel d'un mois (modifie l'opération du mois, jamais la récurrente) */
+    fun setRecMonth(s: St, rid: String, ym: String, v: Double): St {
+        val r = s.rec.find { it.id == rid } ?: return s
+        var t = if (recTxOf(s, r, ym) == null) toggleRec(s, rid, ym) else s
+        t = setRecSkip(t, rid, ym, false)
+        val tx = recTxOf(t, r, ym) ?: return t
+        return t.copy(tx = t.tx.map { if (it === tx) it.copy(montant = r2(v)) else it })
+    }
+
+    private fun createdOf(r: Rec): Long =
+        r.createdAt ?: if (Regex("^r\\d{12,}$").matches(r.id)) r.id.drop(1).toLongOrNull() ?: 0 else 0
+
+    /** coche toute seule les récurrentes dont le jour est passé, et rattrape la fin du mois précédent */
+    fun autoCheckRec(s0: St, today: LocalDate): St {
+        var s = s0
+        val ym = ym(today); val day = today.dayOfMonth
+        recsOf(s, ym).forEach { r ->
+            if (r.id !in done(s, ym) && r.id !in skipped(s, ym) && r.jour <= day) s = toggleRec(s, r.id, ym)
+        }
+        val last = s.lastSeen; val pym = prevM(ym)
+        if (last != null && last.length >= 10 && last.take(7) == pym) {
+            val lastDay = last.substring(8, 10).toInt()
+            val lastTs = LocalDate.parse(last.take(10)).atTime(23, 59).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+            recsOf(s, pym).forEach { r ->
+                if (createdOf(r) > lastTs) return@forEach
+                if (r.id !in done(s, pym) && r.id !in skipped(s, pym) && r.jour > lastDay) s = toggleRec(s, r.id, pym)
+            }
+        }
+        val t = ds(today)
+        if (s.lastSeen != t) s = s.copy(lastSeen = t)
+        return s
+    }
+
+    // ── carte à débit différé ───────────────────────────────
+    fun isCard(t: Tx) = t.sens == DEBIT && t.type != "rec" && t.carte != false
+    fun lastBizDay(y: Int, m: Int): String {
+        var d = YearMonth.of(y, m).atEndOfMonth()
+        while (d.dayOfWeek == DayOfWeek.SATURDAY || d.dayOfWeek == DayOfWeek.SUNDAY) d = d.minusDays(1)
+        return d.toString()
+    }
+    fun debitDate(ds: String): String {
+        val y = ds.take(4).toInt(); val m = ds.substring(5, 7).toInt()
+        val l = lastBizDay(y, m)
+        if (ds < l) return l
+        val n = YearMonth.of(y, m).plusMonths(1)
+        return lastBizDay(n.year, n.monthValue)
+    }
+    fun encours(s: St, d: String): Double = s.tx.filter { isCard(it) && it.date <= d && debitDate(it.date) > d }.sumOf { it.montant }
+
+    // ── soldes ──────────────────────────────────────────────
+    data class Soldes(val reel: Double, val prev: Double, val anchor: Solde?)
+
+    fun pendNet(s: St, ym: String): Double {
+        val d = done(s, ym)
+        return recsOf(s, ym).filter { it.id !in d }.sumOf { if (it.sens == CREDIT) recAmt(s, it, ym) else -recAmt(s, it, ym) }
+    }
+
+    fun calcSoldes(s: St, ym: String, today: LocalDate): Soldes {
+        val td = ds(today); val pn = pendNet(s, ym)
+        val a = s.solde
+        if (a != null) {
+            val after = s.tx.filter { it.date > a.date }
+            val reel = a.montant - encours(s, a.date) + after.filter { it.date <= td }.sumOf { it.signe }
+            val futur = after.filter { it.date > td }.sumOf { it.signe }
+            return Soldes(reel, reel + futur + pn, a)
+        }
+        val net = s.tx.filter { it.mois == ym }.sumOf { it.signe }
+        return Soldes(net, net + pn, null)
+    }
+
+    /** solde vu par la banque au soir d'une date (null sans solde de référence) */
+    fun soldeAt(s: St, d: String): Double? {
+        val a = s.solde ?: return null
+        val base = a.montant - encours(s, a.date)
+        val dispo = if (d >= a.date) base + s.tx.filter { it.date > a.date && it.date <= d }.sumOf { it.signe }
+        else base - s.tx.filter { it.date > d && it.date <= a.date }.sumOf { it.signe }
+        return dispo + encours(s, d)
+    }
+
+    // ── budgets ─────────────────────────────────────────────
+    data class Bud(val cat: String, val bud: Double, val sp: Double) { val pct get() = sp / bud }
+    fun budList(s: St, ym: String): List<Bud> {
+        val sp = HashMap<String, Double>()
+        s.tx.filter { it.mois == ym && it.sens == DEBIT }.forEach { val k = cat(s, it); sp[k] = (sp[k] ?: 0.0) + it.montant }
+        return s.bud.filter { it.value > 0 }.map { Bud(it.key, it.value, sp[it.key] ?: 0.0) }.sortedByDescending { it.pct }
+    }
+
+    // ── saisie rapide : libellés fréquents des 90 derniers jours ──
+    fun habits(s: St, sens: String, today: LocalDate): List<Tx> {
+        val lim = ds(today.minusDays(90))
+        val m = LinkedHashMap<String, Pair<Int, Tx>>()
+        s.tx.filter { it.type != "rec" && it.sens == sens && it.date >= lim }.forEach { t ->
+            val k = t.libelle.trim().lowercase(); if (k.isEmpty()) return@forEach
+            val e = m[k]
+            m[k] = if (e == null) 1 to t else (e.first + 1) to (if (t.date >= e.second.date) t else e.second)
+        }
+        return m.values.sortedWith(compareByDescending<Pair<Int, Tx>> { it.first }.thenByDescending { it.second.date }).map { it.second }
+    }
+
+    // ── crédits ─────────────────────────────────────────────
+    data class Row(val ym: String, val date: String, val it: Double, val cap: Double, val pay: Double, val bal: Double)
+    data class Plan(val m: Double, val rows: List<Row>, val err: String? = null)
+
+    /** échéancier : mensualité constante (calculée, ou celle indiquée par la banque) */
+    fun crPlan(c: Cred): Plan {
+        val t = c.taux / 1200.0
+        if (c.debut.length < 7 || (c.mensu <= 0 && c.duree <= 0)) return Plan(0.0, emptyList(), "Durée ou mensualité requise")
+        val m = r2(if (c.mensu > 0) c.mensu else if (t != 0.0) c.montant * t / (1 - (1 + t).pow(-c.duree)) else c.montant / c.duree)
+        val rows = ArrayList<Row>()
+        var bal = c.montant; var ym = c.debut; var k = 0
+        while (k < 600 && bal > 0.004) {
+            val it = r2(bal * t)
+            var cap = r2(m - it)
+            if (cap <= 0) return Plan(m, emptyList(), "La mensualité ne couvre pas les intérêts")
+            if (cap > bal || (c.mensu <= 0 && k == c.duree - 1)) cap = bal
+            bal = r2(bal - cap)
+            rows += Row(ym, dayOf(ym, c.jour), it, cap, r2(it + cap), bal)
+            ym = nextM(ym); k++
+        }
+        return Plan(m, rows)
+    }
+
+    data class Etat(
+        val m: Double, val err: String?, val rows: List<Row>, val nPaid: Int, val nRest: Int, val cap: Double,
+        val itPaid: Double, val itRest: Double, val itTot: Double, val totPay: Double, val fin: String, val prochaine: Row?,
+    )
+
+    fun crEtat(c: Cred, today: LocalDate): Etat {
+        val p = crPlan(c); val td = ds(today)
+        val paid = p.rows.filter { it.date <= td }; val rest = p.rows.drop(paid.size)
+        return Etat(
+            m = p.m, err = p.err, rows = p.rows, nPaid = paid.size, nRest = rest.size,
+            cap = paid.lastOrNull()?.bal ?: c.montant,
+            itPaid = r2(paid.sumOf { it.it }), itRest = r2(rest.sumOf { it.it }), itTot = r2(p.rows.sumOf { it.it }),
+            totPay = r2(p.rows.sumOf { it.pay }), fin = p.rows.lastOrNull()?.ym ?: c.debut, prochaine = rest.firstOrNull(),
+        )
+    }
+
+    data class Totaux(val cap: Double, val mens: Double, val itRest: Double, val fin: String)
+    fun crTotaux(s: St, today: LocalDate): Totaux {
+        var cap = 0.0; var mens = 0.0; var it = 0.0; var fin = ""
+        s.cred.forEach { c -> val e = crEtat(c, today); if (e.nRest > 0) { cap += e.cap; mens += e.m; it += e.itRest; if (e.fin > fin) fin = e.fin } }
+        return Totaux(r2(cap), r2(mens), r2(it), fin)
+    }
+
+    /** récurrente du crédit : créée, mise à jour, arrêtée à la dernière échéance */
+    fun saveCredit(s: St, c0: Cred, now: Long): St {
+        val p = crPlan(c0); if (p.rows.isEmpty()) return s
+        val c = if (c0.duree <= 0) c0.copy(duree = p.rows.size) else c0
+        val old = s.rec.find { it.id == c.recId }
+        val rid = old?.id ?: "r$now"
+        val r = Rec(
+            id = rid, libelle = c.nom, montant = p.m, sens = DEBIT, categorie = Cats.CREDITS, jour = c.jour,
+            createdAt = old?.createdAt ?: now, debut = c.debut, fin = p.rows.last().ym, credId = c.id,
+        )
+        val cc = c.copy(recId = rid)
+        val creds = if (s.cred.any { it.id == c.id }) s.cred.map { if (it.id == c.id) cc else it } else s.cred + cc
+        val recs = if (old != null) s.rec.map { if (it.id == rid) r else it } else s.rec + r
+        return s.copy(cred = creds, rec = recs)
+    }
+
+    fun delCredit(s: St, id: String): St {
+        val c = s.cred.find { it.id == id } ?: return s
+        return s.copy(cred = s.cred.filter { it.id != id }, rec = s.rec.filter { it.id != c.recId })
+    }
+
+    // ── analyse ─────────────────────────────────────────────
+    fun lastMonths(n: Int, today: LocalDate): List<String> {
+        val r = ArrayList<String>(); var m = ym(today)
+        repeat(n) { r.add(0, m); m = prevM(m) }
+        return r
+    }
+    /** solde réel (hors encours carte) en fin de chaque mois */
+    fun soldeFinMois(s: St, ym: String, today: LocalDate): Double? {
+        val l = YearMonth.parse(ym).atEndOfMonth().toString()
+        val d = if (l < ds(today)) l else ds(today)
+        val v = soldeAt(s, d) ?: return null
+        return r2(v - encours(s, d))
+    }
+    fun parCat(s: St, ym: String): List<Pair<String, Double>> {
+        val m = LinkedHashMap<String, Double>()
+        s.tx.filter { it.mois == ym && it.sens == DEBIT }.forEach { val c = cat(s, it); m[c] = (m[c] ?: 0.0) + it.montant }
+        return m.entries.sortedByDescending { it.value }.take(10).map { it.key to it.value }
+    }
+}

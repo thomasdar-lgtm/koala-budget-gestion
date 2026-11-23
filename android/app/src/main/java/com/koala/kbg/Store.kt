@@ -1,7 +1,5 @@
 package com.koala.kbg
 
-import org.json.JSONArray
-import org.json.JSONObject
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -60,18 +58,11 @@ class Store(root: File) {
     @Synchronized
     fun read(name: String): String = file(name)?.readText() ?: ""
 
+    data class Info(val name: String, val daily: Boolean, val time: Long, val size: Long)
+
     @Synchronized
-    fun list(): String {
-        val arr = JSONArray()
-        all().sortedByDescending { it.lastModified() }.forEach { f ->
-            arr.put(JSONObject()
-                .put("name", f.name)
-                .put("daily", DAILY.matches(f.name))
-                .put("time", f.lastModified())
-                .put("size", f.length()))
-        }
-        return arr.toString()
-    }
+    fun infos(): List<Info> = all().sortedByDescending { it.lastModified() }
+        .map { Info(it.name, DAILY.matches(it.name), it.lastModified(), it.length()) }
 
     private fun all() = backups.listFiles { f -> f.isFile && SAFE_NAME.matches(f.name) }?.toList() ?: emptyList()
 

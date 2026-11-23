@@ -3,7 +3,7 @@ name: Build APK
 on:
   push:
     branches: [main]
-    paths: ['index.html', 'chart.umd.min.js', 'android/**', '.github/workflows/build-apk.yml']
+    paths: ['android/**', '.github/workflows/build-apk.yml']
   workflow_dispatch:
 
 permissions:
@@ -32,7 +32,7 @@ jobs:
 
       - name: Prepare APK
         run: |
-          VERSION=$(grep -oP "APP_VERSION\s*=\s*'\K[0-9.]+" ../index.html | head -1)
+          VERSION=$(grep -oP 'versionName = "\K[0-9.]+' app/build.gradle.kts | head -1)
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           cp app/build/outputs/apk/release/app-release.apk ../KBG.apk
 

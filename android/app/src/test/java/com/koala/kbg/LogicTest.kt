@@ -1,0 +1,126 @@
+package com.koala.kbg
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import java.time.LocalDate
+
+/** Valeurs de référence : celles de la version web (v1.85), vérifiées au centime. */
+class LogicTest {
+    private val today = LocalDate.of(2026, 11, 18)
+    private fun eq(a: Double, b: Double) = assertEquals(a, b, 0.001)
+
+    @Test fun creditCalcule() {
+        val c = Cred("c1", "Dispo", 10000.0, 6.0, 60, 0.0, "2026-12", 5)
+        val p = Logic.crPlan(c)
+        eq(193.33, p.m); assertEquals(60, p.rows.size); eq(0.0, p.rows.last().bal)
+        val e = Logic.crEtat(c, today)
+        eq(1599.68, e.itTot); assertEquals("2031-11", e.fin); assertEquals(0, e.nPaid); eq(10000.0, e.cap)
+    }
+
+    @Test fun creditEnCours() {
+        val c = Cred("c2", "Auto", 15000.0, 4.5, 48, 0.0, "2024-03", 10)
+        val e = Logic.crEtat(c, today)
+        eq(342.05, e.m); assertEquals(33, e.nPaid); eq(4980.15, e.cap); eq(1418.52, e.itTot); assertEquals("2028-02", e.fin)
+        eq(342.17, e.rows.last().pay)
+    }
+
+    @Test fun creditParMensualite() {
+        val c = Cred("c3", "Floa", 2000.0, 12.0, 0, 100.0, "2026-06", 15)
+        val e = Logic.crEtat(c, today)
+        assertEquals(23, e.rows.size); eq(242.69, e.itTot); assertEquals(6, e.nPaid); eq(1507.84, e.cap); assertEquals("2028-04", e.fin)
+        assertTrue(Logic.crPlan(c.copy(mensu = 15.0)).err != null)
+    }
+
+    @Test fun creditRecurrente() {
+        var s = St()
+        s = Logic.saveCredit(s, Cred("c2", "Auto", 15000.0, 4.5, 48, 0.0, "2024-03", 10), 1_000_000_000_000)
+        val r = s.rec.single()
+        assertEquals("2024-03", r.debut); assertEquals("2028-02", r.fin); assertEquals(Cats.CREDITS, r.categorie); eq(342.05, r.montant)
+        assertEquals(r.id, s.cred.single().recId)
+        eq(342.17, Logic.recAmt(s, r, "2028-02"))
+        assertTrue(Logic.recsOf(s, "2028-03").isEmpty())
+        s = Logic.autoCheckRec(s, today)
+        val t = s.tx.single(); assertEquals("2026-11-10", t.date); eq(342.05, t.montant)
+        s = Logic.delCredit(s, "c2")
+        assertTrue(s.rec.isEmpty()); assertEquals(1, s.tx.size)
+    }
+
+    @Test fun carteDiffere() {
+        assertEquals("2026-11-30", Logic.debitDate("2026-11-10"))
+        assertEquals("2026-12-31", Logic.debitDate("2026-11-30"))
+        assertEquals("2027-01-29", Logic.lastBizDay(2027, 1))
+    }
+
+    @Test fun soldes() {
+        val s = St(
+            tx = listOf(
+                Tx(1, "2026-11-10", "Courses", 50.0, "Alimentation", DEBIT),
+                Tx(2, "2026-11-20", "Vente", 200.0, "Revenus Autres", CREDIT),
+                Tx(3, "2026-11-28", "Plein", 30.0, "Transport & Carburant", DEBIT),
+            ),
+            rec = listOf(Rec("r1", "Loyer", 100.0, DEBIT, "Logement & Charges", 25)),
+            solde = Solde(1000.0, "2026-11-15"),
+        )
+        val r = Logic.calcSoldes(s, "2026-11", LocalDate.of(2026, 11, 23))
+        eq(1150.0, r.reel); eq(1020.0, r.prev)
+        eq(1000.0, Logic.soldeAt(s, "2026-11-15")!!)
+        eq(80.0, Logic.encours(s, "2026-11-28"))
+        assertNull(Logic.soldeAt(s.copy(solde = null), "2026-11-15"))
+    }
+
+    @Test fun autoCochage() {
+        var s = St(
+            rec = listOf(
+                Rec("r1", "Box", 30.0, DEBIT, "Factures & Abonnements", 5, createdAt = 1),
+                Rec("r2", "Loyer", 600.0, DEBIT, "Logement & Charges", 25, createdAt = 1),
+                Rec("r3", "Assurance", 40.0, DEBIT, "Divers", 3, createdAt = 1),
+                Rec("r4", "Salaire", 1800.0, CREDIT, "Revenus Salaire", 30, createdAt = 1),
+            ),
+            recSkip = mapOf("2026-11" to listOf("r3")),
+            lastSeen = "2026-10-28",
+        )
+        s = Logic.autoCheckRec(s, LocalDate.of(2026, 11, 23))
+        assertEquals(listOf("r1"), s.recDone["2026-11"])
+        assertEquals(listOf("r4"), s.recDone["2026-10"])
+        assertEquals("2026-11-23", s.lastSeen)
+        assertEquals(setOf("Box", "Salaire"), s.tx.map { it.libelle }.toSet())
+        // décocher à la main : reste décochée
+        s = Logic.toggleRecUser(s, "r1", "2026-11")
+        s = Logic.autoCheckRec(s, LocalDate.of(2026, 11, 24))
+        assertFalse("r1" in s.recDone["2026-11"]!!)
+        // montant réel du mois
+        s = Logic.setRecMonth(s, "r1", "2026-11", 34.5)
+        eq(34.5, s.tx.first { it.recId == "r1" }.montant); assertTrue("r1" in s.recDone["2026-11"]!!)
+    }
+
+    @Test fun jsonCompatibleWeb() {
+        val web = """{"manTx":[{"id":1,"date":"2026-11-01","libelle":"Lot cartes","montant":280,"sens":"debit","categorie":"Pokémon TCG","type":"manuel","manual":true,"carte":false},
+            {"id":2,"date":"2026-11-05","libelle":"Salaire","montant":"2100,5","sens":"credit","categorie":"Revenus Salaire","type":"rec","display_month":"2026-11","recId":"r1"}],
+            "ovr":{},"bud":{"Alimentation":400},"xbal":{},"rec":[{"id":"r1","libelle":"Salaire","montant":2100.5,"sens":"credit","categorie":"Revenus Salaire","jour":5}],
+            "recDone":{"2026-11":["r1"]},"solde":{"montant":-12.5,"date":"2026-11-02"},"_updatedAt":1763000000000}"""
+        val s = Json.parse(web)
+        assertEquals(2, s.tx.size); eq(2100.5, s.tx[1].montant); assertEquals(false, s.tx[0].carte); assertEquals("2026-11", s.tx[1].displayMonth)
+        eq(400.0, s.bud["Alimentation"]!!); eq(-12.5, s.solde!!.montant); assertEquals(listOf("r1"), s.recDone["2026-11"])
+        assertEquals(s, Json.parse(Json.write(s)))
+    }
+
+    @Test fun format() {
+        assertEquals("1 234,50 €", Logic.fmt(-1234.5))
+        assertEquals("-12,00 €", Logic.fmtS(-12.0))
+        assertEquals("Novembre 2026", Logic.fmtM("2026-11"))
+    }
+
+    @Test fun habitudes() {
+        val s = St(tx = listOf(
+            Tx(1, "2026-11-01", "Leclerc", 50.0, "Alimentation", DEBIT),
+            Tx(2, "2026-11-10", "leclerc ", 62.0, "Alimentation", DEBIT),
+            Tx(3, "2026-11-12", "Total", 40.0, "Transport & Carburant", DEBIT),
+            Tx(4, "2026-06-01", "Vieux", 1.0, "Divers", DEBIT),
+        ))
+        val h = Logic.habits(s, DEBIT, today)
+        assertEquals(listOf(2L, 3L), h.map { it.id })
+    }
+}

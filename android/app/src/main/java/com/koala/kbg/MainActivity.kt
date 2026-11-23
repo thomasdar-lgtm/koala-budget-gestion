@@ -1,209 +1,215 @@
 package com.koala.kbg
 
-import android.annotation.SuppressLint
-import android.content.ClipData
-import android.content.Intent
-import android.graphics.Color
-import android.net.Uri
 import android.os.Bundle
-import android.webkit.JavascriptInterface
-import android.webkit.ValueCallback
-import android.webkit.WebChromeClient
-import android.webkit.WebResourceRequest
-import android.webkit.WebResourceResponse
-import android.webkit.WebView
-import android.webkit.WebViewClient
-import android.widget.FrameLayout
-import android.widget.Toast
 import androidx.activity.ComponentActivity
-import androidx.activity.OnBackPressedCallback
+import androidx.activity.SystemBarStyle
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.core.content.FileProvider
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.webkit.WebViewAssetLoader
-import org.json.JSONObject
-import java.io.File
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.LifecycleResumeEffect
+import kotlinx.coroutines.delay
+
+/** État de l'interface (onglet, feuille ouverte, message, confirmation). */
+object Nav {
+    var tab by mutableStateOf("home")
+    var sheet by mutableStateOf<Sheet?>(null)
+    var notif by mutableStateOf<Pair<String, Boolean>?>(null)
+    var notifN by mutableStateOf(0)
+    var ask by mutableStateOf<Ask?>(null)
+    var importReq by mutableStateOf(0)
+
+    // mois affichés
+    var opYM by mutableStateOf(Logic.ym(java.time.LocalDate.now()))
+    var pokeYM by mutableStateOf(Logic.ym(java.time.LocalDate.now()))
+
+    fun go(t: String) {
+        sheet = null
+        if (t == "saisie") opYM = Logic.ym(Db.today)
+        if (t == "pokemon") pokeYM = Logic.ym(Db.today)
+        tab = t
+    }
+    fun open(s: Sheet) { sheet = s }
+    fun close() { sheet = null }
+    fun notify(msg: String, err: Boolean = false) { notif = msg to err; notifN++ }
+    fun confirm(title: String, text: String, ok: String, action: () -> Unit) { ask = Ask(title, text, ok, action) }
+}
+
+data class Ask(val title: String, val text: String, val ok: String, val action: () -> Unit)
+
+sealed class Sheet {
+    data object Menu : Sheet()
+    data object Solde : Sheet()
+    data object Budgets : Sheet()
+    data object Backups : Sheet()
+    data object AddTx : Sheet()
+    data class EditTx(val id: Long) : Sheet()
+    data class RecEdit(val id: String?) : Sheet()
+    data class RecMonth(val rid: String, val ym: String) : Sheet()
+    data class CreditDetail(val id: String) : Sheet()
+    data class CreditEdit(val id: String?) : Sheet()
+}
 
 class MainActivity : ComponentActivity() {
-
-    companion object {
-        const val HOST = "appassets.androidplatform.net"
-        const val START = "https://$HOST/assets/www/index.html"
-    }
-
-    private lateinit var web: WebView
-    lateinit var store: Store
-    private var fileCb: ValueCallback<Array<Uri>>? = null
-    private var pendingUpdate: UpdateInfo? = null
-    @Volatile private var downloading = false
-
-    private val pickFile = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        fileCb?.onReceiveValue(if (uri != null) arrayOf(uri) else null)
-        fileCb = null
-    }
-
-    @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        store = Store(filesDir)
-
-        WindowCompat.setDecorFitsSystemWindows(window, false)
-        val root = FrameLayout(this).apply { setBackgroundColor(Color.parseColor("#0F1117")) }
-        web = WebView(this).apply { setBackgroundColor(Color.parseColor("#0F1117")) }
-        root.addView(web, FrameLayout.LayoutParams(-1, -1))
-        setContentView(root)
-        ViewCompat.setOnApplyWindowInsetsListener(root) { v, ins ->
-            val b = ins.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.ime() or WindowInsetsCompat.Type.displayCutout())
-            v.setPadding(b.left, b.top, b.right, b.bottom)
-            WindowInsetsCompat.CONSUMED
-        }
-        WindowCompat.getInsetsController(window, root).apply {
-            isAppearanceLightStatusBars = false
-            isAppearanceLightNavigationBars = false
-        }
-
-        val loader = WebViewAssetLoader.Builder()
-            .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
-            .build()
-
-        web.settings.apply {
-            javaScriptEnabled = true
-            domStorageEnabled = true
-            allowFileAccess = false
-            allowContentAccess = true
-            textZoom = 100
-        }
-        web.webViewClient = object : WebViewClient() {
-            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? =
-                loader.shouldInterceptRequest(request.url)
-
-            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
-                if (request.url.host == HOST) return false
-                runCatching { startActivity(Intent(Intent.ACTION_VIEW, request.url)) }
-                return true
-            }
-        }
-        web.webChromeClient = object : WebChromeClient() {
-            override fun onShowFileChooser(view: WebView, cb: ValueCallback<Array<Uri>>, params: FileChooserParams): Boolean {
-                fileCb?.onReceiveValue(null)
-                fileCb = cb
-                return try {
-                    pickFile.launch(arrayOf("application/json", "application/octet-stream", "text/plain", "*/*"))
-                    true
-                } catch (e: Exception) {
-                    fileCb = null; false
-                }
-            }
-        }
-        web.addJavascriptInterface(Bridge(), "KBGA")
-
-        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() {
-                web.evaluateJavascript("(window.kbgBack&&window.kbgBack())?'1':'0'") { r ->
-                    if (r != "\"1\"") moveTaskToBack(true)
-                }
-            }
-        })
-
-        if (savedInstanceState != null) web.restoreState(savedInstanceState)
-        if (web.url == null) web.loadUrl(START)
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(K.Bg.toArgb()),
+            navigationBarStyle = SystemBarStyle.dark(K.Sf.toArgb()),
+        )
+        Db.init(this)
+        setContent { KbgTheme { KbgApp() } }
     }
+}
 
-    override fun onSaveInstanceState(outState: Bundle) {
-        super.onSaveInstanceState(outState)
-        web.saveState(outState)
+@Composable
+fun KbgApp() {
+    val pick = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) { if (Db.importFrom(uri)) Nav.notify("Import réussi ✓") else Nav.notify("Fichier invalide", true) }
     }
-
-    private fun js(code: String) = runOnUiThread { web.evaluateJavascript(code, null) }
-    private fun toast(msg: String) = runOnUiThread { Toast.makeText(this, msg, Toast.LENGTH_LONG).show() }
-
-    private fun shareFile(f: File, titre: String) {
-        val uri = FileProvider.getUriForFile(this, "$packageName.files", f)
-        val send = Intent(Intent.ACTION_SEND)
-            .setType("application/json")
-            .putExtra(Intent.EXTRA_STREAM, uri)
-            .putExtra(Intent.EXTRA_SUBJECT, f.name)
-            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        send.clipData = ClipData.newRawUri(f.name, uri)
-        runOnUiThread { startActivity(Intent.createChooser(send, titre)) }
+    LaunchedEffect(Nav.importReq) {
+        if (Nav.importReq > 0) runCatching { pick.launch(arrayOf("application/json", "application/octet-stream", "text/plain", "*/*")) }
     }
-
-    /** Pont appelé par index.html (window.KBGA). */
-    inner class Bridge {
-        @JavascriptInterface fun version(): String = BuildConfig.VERSION_NAME
-
-        @JavascriptInterface fun saveState(json: String): Boolean =
-            runCatching { store.save(json) }.isSuccess
-
-        @JavascriptInterface fun loadState(): String = runCatching { store.load() }.getOrDefault("")
-
-        @JavascriptInterface fun safetyCopy(json: String, motif: String): String =
-            runCatching { store.safetyCopy(json, motif) }.getOrDefault("")
-
-        @JavascriptInterface fun listBackups(): String = runCatching { store.list() }.getOrDefault("[]")
-
-        @JavascriptInterface fun readBackup(name: String): String = runCatching { store.read(name) }.getOrDefault("")
-
-        @JavascriptInterface fun share(json: String, name: String): Boolean = runCatching {
-            val dir = File(cacheDir, "share").apply { mkdirs() }
-            dir.listFiles()?.forEach { it.delete() }
-            val safe = name.replace(Regex("[^A-Za-z0-9._-]"), "_").ifEmpty { "kbg.json" }
-            val f = File(dir, safe).apply { writeText(json) }
-            shareFile(f, "Partager une copie de KBG")
-        }.isSuccess
-
-        @JavascriptInterface fun shareBackup(name: String): Boolean = runCatching {
-            val src = store.file(name) ?: return false
-            val dir = File(cacheDir, "share").apply { mkdirs() }
-            dir.listFiles()?.forEach { it.delete() }
-            val f = src.copyTo(File(dir, name), true)
-            shareFile(f, "Partager cette sauvegarde")
-        }.isSuccess
-
-        /** Résultat renvoyé à kbgMajRes(x) : version (texte), null si à jour, 'offline' si erreur. */
-        @JavascriptInterface fun checkUpdate() {
-            Thread {
-                val res = runCatching { Updater.check() }
-                res.onSuccess { info ->
-                    pendingUpdate = info
-                    js("window.kbgMajRes&&kbgMajRes(" + (info?.let { JSONObject.quote(it.version) } ?: "null") + ")")
-                }.onFailure { js("window.kbgMajRes&&kbgMajRes('offline')") }
-            }.start()
+    LifecycleResumeEffect(Unit) { Db.tick(); onPauseOrDispose { } }
+    LaunchedEffect(Unit) {
+        while (true) {
+            runCatching { Updater.check() }.onSuccess { if (it != null && it.version != Upd.info?.version) { Upd.info = it; Upd.hidden = false } }
+            delay(6 * 3600 * 1000L)
         }
+    }
+    BackHandler(enabled = Nav.sheet == null && Nav.tab != "home") { Nav.go("home") }
 
-        /** Progression renvoyée à kbgMajProg(p) : 0..1, -1 = abandon/erreur. */
-        @JavascriptInterface fun installUpdate() {
-            val info = pendingUpdate ?: run { js("window.kbgMajProg&&kbgMajProg(-1)"); return }
-            if (!Updater.canInstall(this@MainActivity)) {
-                toast("Autorise KBG à installer des applis, puis appuie à nouveau sur Installer")
-                runOnUiThread { Updater.askInstallPermission(this@MainActivity) }
-                js("window.kbgMajProg&&kbgMajProg(-1)")
-                return
-            }
-            if (downloading) return
-            downloading = true
-            Thread {
-                var last = -1
-                val f = runCatching {
-                    Updater.download(this@MainActivity, info.url) { p ->
-                        val pc = (p * 100).toInt()
-                        if (pc != last) { last = pc; js("window.kbgMajProg&&kbgMajProg(${p})") }
-                    }
-                }.getOrNull()
-                downloading = false
-                if (f == null) {
-                    toast("Téléchargement impossible, vérifie ta connexion")
-                    js("window.kbgMajProg&&kbgMajProg(-1)")
-                } else {
-                    js("window.kbgMajProg&&kbgMajProg(1)")
-                    runOnUiThread {
-                        runCatching { Updater.install(this@MainActivity, f) }
-                            .onFailure { toast("Installation impossible") }
+    Box(Modifier.fillMaxSize().background(K.Bg)) {
+        Column(Modifier.fillMaxSize()) {
+            Column(Modifier.weight(1f).statusBarsPadding()) {
+                UpdateBanner()
+                Box(Modifier.weight(1f)) {
+                    when (Nav.tab) {
+                        "home" -> HomeScreen()
+                        "saisie" -> OpsScreen()
+                        "pokemon" -> PokeScreen()
+                        "credits" -> CreditsScreen()
+                        "analyse" -> AnalyseScreen()
                     }
                 }
-            }.start()
+            }
+            BottomNav()
+        }
+        if (Nav.tab == "saisie") {
+            Box(Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 18.dp, bottom = 84.dp)
+                .size(58.dp).clip(RoundedCornerShape(18.dp)).background(K.Ac).clickable { Nav.open(Sheet.AddTx) },
+                contentAlignment = Alignment.Center) { T("+", 30.sp, Color.White, FontWeight.Light) }
+        }
+        NotifHost(Modifier.align(Alignment.TopCenter))
+    }
+    SheetHost()
+    Nav.ask?.let { a ->
+        AlertDialog(
+            onDismissRequest = { Nav.ask = null },
+            title = { Text(a.title) }, text = { Text(a.text) },
+            confirmButton = { TextButton({ Nav.ask = null; a.action() }) { Text(a.ok, color = K.Re, fontWeight = FontWeight.Bold) } },
+            dismissButton = { TextButton({ Nav.ask = null }) { Text("Annuler", color = K.Tx2) } },
+            containerColor = K.Sf, titleContentColor = K.Tx, textContentColor = K.Tx2,
+        )
+    }
+}
+
+@Composable
+private fun BottomNav() {
+    Row(Modifier.fillMaxWidth().background(K.Sf).border(width = 1.dp, color = K.Bd, shape = RoundedCornerShape(0.dp))
+        .navigationBarsPadding().padding(top = 6.dp, bottom = 8.dp)) {
+        listOf("home" to "Aujourd'hui", "saisie" to "Opérations", "pokemon" to "Pokémon", "credits" to "Crédits", "analyse" to "Analyse").forEach { (k, l) ->
+            val on = Nav.tab == k
+            Column(Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).clickable { Nav.go(k) }.padding(vertical = 4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(Modifier.clip(RoundedCornerShape(8.dp)).background(if (on) K.Ac.copy(alpha = 0.15f) else Color.Transparent)
+                    .padding(horizontal = 12.dp, vertical = 2.dp), contentAlignment = Alignment.Center) {
+                    when (k) {
+                        "home" -> T("🏠", 20.sp)
+                        "saisie" -> T("📝", 20.sp)
+                        "pokemon" -> Image(painterResource(R.drawable.poke), null, Modifier.height(24.dp).clip(RoundedCornerShape(2.dp)))
+                        "credits" -> T("🏛️", 20.sp)
+                        else -> T("📊", 20.sp)
+                    }
+                }
+                Spacer(Modifier.height(2.dp))
+                T(l, 10.sp, if (on) K.Ac else K.Tx2, if (on) FontWeight.Bold else FontWeight.Normal, lines = 1)
+            }
         }
     }
+}
+
+@Composable
+private fun NotifHost(modifier: Modifier) {
+    val n = Nav.notif
+    var visible by androidx.compose.runtime.remember { mutableStateOf(false) }
+    LaunchedEffect(Nav.notifN) {
+        if (Nav.notifN > 0) { visible = true; delay(2200); visible = false }
+    }
+    AnimatedVisibility(visible && n != null, modifier.statusBarsPadding().padding(top = 10.dp),
+        enter = slideInVertically { -it } + fadeIn(), exit = slideOutVertically { -it } + fadeOut()) {
+        val c = if (n?.second == true) K.Re else K.Gr
+        Box(Modifier.clip(RoundedCornerShape(10.dp)).background(K.Sf).border(1.dp, c, RoundedCornerShape(10.dp))
+            .padding(horizontal = 18.dp, vertical = 10.dp)) { T(n?.first ?: "", 13.sp, c, FontWeight.SemiBold) }
+    }
+}
+
+/** en-tête d'écran : titre + bouton menu */
+@Composable
+fun Header(title: String, icon: @Composable (() -> Unit)? = null, right: @Composable (() -> Unit)? = null) {
+    Row(Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (icon != null) { icon(); Spacer(Modifier.width(9.dp)) }
+        T(title, 22.sp, K.Tx, FontWeight.ExtraBold, Modifier.weight(1f), lines = 1)
+        if (right != null) { right(); Spacer(Modifier.width(10.dp)) }
+        Box(Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(K.Sf2).clickable { Nav.open(Sheet.Menu) },
+            contentAlignment = Alignment.Center) { T("☰", 18.sp, K.Tx2) }
+    }
+}
+
+/** page défilante avec marges */
+@Composable
+fun Page(content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 96.dp), content = content)
 }
