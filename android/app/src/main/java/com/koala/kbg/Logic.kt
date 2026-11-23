@@ -257,6 +257,21 @@ object Logic {
         return s.copy(cred = s.cred.filter { it.id != id }, rec = s.rec.filter { it.id != c.recId })
     }
 
+    // ── recherche ───────────────────────────────────────────
+    private fun plain(x: String) = java.text.Normalizer.normalize(x, java.text.Normalizer.Form.NFD)
+        .replace(Regex("\\p{Mn}+"), "").lowercase().trim()
+
+    /** opérations de tous les mois dont le libellé, la catégorie ou le montant correspond (86 trouve 86,40) */
+    fun search(s: St, q: String): List<Tx> {
+        val p = plain(q); if (p.isEmpty()) return emptyList()
+        val n = p.replace(" ", "").replace('€', ' ').trim().replace(',', '.').toDoubleOrNull()
+        val entier = n != null && !p.contains(',') && !p.contains('.')
+        return s.tx.filter { t ->
+            plain(t.libelle).contains(p) || plain(cat(s, t)).contains(p) ||
+                (n != null && (abs(t.montant - n) < 0.005 || (entier && kotlin.math.floor(t.montant) == n)))
+        }.sortedWith(compareByDescending<Tx> { it.date }.thenByDescending { it.id })
+    }
+
     // ── analyse ─────────────────────────────────────────────
     fun lastMonths(n: Int, today: LocalDate): List<String> {
         val r = ArrayList<String>(); var m = ym(today)

@@ -15,6 +15,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.activity.compose.BackHandler
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -98,8 +104,16 @@ fun OpsScreen() {
     val s = Db.s; val ym = Nav.opYM
     var sens by rememberSaveable { mutableStateOf("all") }
     var type by rememberSaveable { mutableStateOf("all") }
+    val q = Nav.opQ
+    BackHandler(enabled = q != null) { Nav.opQ = null }
     Page {
-        Header("📝 Opérations")
+        Header("📝 Opérations", right = {
+            Box(Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(if (q != null) K.Ac else K.Sf2)
+                .clickable { Nav.opQ = if (q == null) "" else null }, contentAlignment = Alignment.Center) {
+                T(if (q == null) "🔍" else "✕", if (q == null) 16.sp else 17.sp, if (q == null) K.Tx2 else Color.White)
+            }
+        })
+        if (q != null) { SearchOps(s, q); return@Page }
         Seg(listOf("all" to "Tout", DEBIT to "Sorties", CREDIT to "Entrées"), sens) { sens = it }
         Seg(listOf("all" to "Toutes", "classic" to "Classiques", "rec" to "Récurrentes"), type) { type = it }
         MonthNav(ym) { Nav.opYM = it }
@@ -118,6 +132,28 @@ fun OpsScreen() {
             }
         }
     }
+}
+
+/** recherche tous mois confondus : libellé, catégorie ou montant */
+@Composable
+private fun SearchOps(s: St, q: String) {
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    var page by rememberSaveable { mutableIntStateOf(1) }
+    Field(q, { Nav.opQ = it; page = 1 }, "Libellé, catégorie ou montant", Modifier.focusRequester(focus), placeholder = "ex : Leclerc, 86")
+    if (q.isBlank()) { T("Tous les mois sont fouillés. Un montant sans centimes (86) trouve aussi 86,40 €.", 12.sp, K.Tx3, modifier = Modifier.padding(4.dp)); return }
+    val r = Logic.search(s, q)
+    val net = r.sumOf { it.signe }
+    Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp)) {
+        T("${r.size} résultat" + (if (r.size > 1) "s" else ""), 12.5.sp, K.Tx2, modifier = Modifier.weight(1f))
+        if (r.isNotEmpty()) { T("Total ", 12.5.sp, K.Tx2); T((if (net >= 0) "+" else "-") + Logic.fmt(net), 12.5.sp, if (net >= 0) K.Gr else K.Re, FontWeight.Bold) }
+    }
+    val shown = r.take(30 * page)
+    Card(pad = 12.dp) {
+        if (shown.isEmpty()) Empty("🔍", "Aucune opération trouvée")
+        shown.forEachIndexed { i, t -> if (i > 0) Divider(); TxRow(s, t) { Nav.open(Sheet.EditTx(t.id)) } }
+    }
+    if (r.size > shown.size) BtnGhost("Voir plus (${r.size - shown.size} restantes)") { page++ }
 }
 
 @Composable

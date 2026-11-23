@@ -77,5 +77,6 @@ class ScreensShot {
     @Test fun menu() = shot("7_menu") { SheetFrame { MenuSheet() } }
     @Test fun creditDetail() = shot("8_credit") { SheetFrame { CreditDetailSheet("c2") } }
     @Test fun creditEdit() = shot("9_credit_saisie") { SheetFrame { CreditEditSheet("c1") } }
+    @Test fun recherche() { Nav.opQ = "leclerc"; shot("11_recherche", "saisie") { Frame { OpsScreen() } }; Nav.opQ = null }
     @Test fun solde() = shot("10_solde") { SheetFrame { SoldeSheet() } }
 }

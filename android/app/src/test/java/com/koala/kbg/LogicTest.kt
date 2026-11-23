@@ -123,4 +123,19 @@ class LogicTest {
         val h = Logic.habits(s, DEBIT, today)
         assertEquals(listOf(2L, 3L), h.map { it.id })
     }
+
+    @Test fun recherche() {
+        val s = St(tx = listOf(
+            Tx(1, "2026-11-01", "Leclerc", 86.4, "Alimentation", DEBIT),
+            Tx(2, "2026-12-10", "LECLERC drive", 52.0, "Alimentation", DEBIT),
+            Tx(3, "2026-12-12", "Électricité", 86.0, "Factures & Abonnements", DEBIT),
+            Tx(4, "2026-10-12", "Vente", 12.5, "Revenus Autres", CREDIT),
+        ))
+        assertEquals(listOf(2L, 1L), Logic.search(s, " leclerc").map { it.id })
+        assertEquals(listOf(3L), Logic.search(s, "electricite").map { it.id })
+        assertEquals(listOf(3L, 1L), Logic.search(s, "86").map { it.id })
+        assertEquals(listOf(1L), Logic.search(s, "86,40").map { it.id })
+        assertEquals(listOf(1L, 2L), Logic.search(s, "aliment").map { it.id }.sortedBy { it })
+        assertTrue(Logic.search(s, "  ").isEmpty())
+    }
 }

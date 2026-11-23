@@ -64,10 +64,11 @@ object Nav {
     // mois affichés
     var opYM by mutableStateOf(Logic.ym(java.time.LocalDate.now()))
     var pokeYM by mutableStateOf(Logic.ym(java.time.LocalDate.now()))
+    var opQ by mutableStateOf<String?>(null)   // recherche dans Opérations (null = fermée)
 
     fun go(t: String) {
         sheet = null
-        if (t == "saisie") opYM = Logic.ym(Db.today)
+        if (t == "saisie") { opYM = Logic.ym(Db.today); opQ = null }
         if (t == "pokemon") pokeYM = Logic.ym(Db.today)
         tab = t
     }
