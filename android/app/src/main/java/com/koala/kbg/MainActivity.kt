@@ -225,6 +225,10 @@ private fun NotifHost(modifier: Modifier) {
     }
 }
 
+/** icône d'onglet à côté du titre */
+@Composable
+fun TabIcon(res: Int) = Image(painterResource(res), null, Modifier.size(30.dp))
+
 /** en-tête d'écran : titre + bouton menu */
 @Composable
 fun Header(title: String, icon: @Composable (() -> Unit)? = null, right: @Composable (() -> Unit)? = null) {

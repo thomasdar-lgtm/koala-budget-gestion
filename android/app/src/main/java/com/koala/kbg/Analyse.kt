@@ -52,7 +52,7 @@ private val PAL = listOf(0xFF6C63FF, 0xFFFF6584, 0xFF4ECCA3, 0xFFFFD166, 0xFFA29
 fun AnalyseScreen() {
     val tab = Nav.anTab
     Page {
-        Header("📊 Analyse")
+        Header("Analyse", icon = { TabIcon(R.drawable.nav_ana) })
         Seg(listOf("cat" to "Catég.", "bilan" to "Bilan", "solde" to "Solde", "mois" to "Par mois", "histo" to "Histo"), tab) { Nav.anTab = it }
         Spacer(Modifier.height(6.dp))
         when (tab) {

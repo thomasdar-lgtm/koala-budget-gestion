@@ -157,7 +157,7 @@ fun OpsScreen() {
     val q = Nav.opQ
     BackHandler(enabled = q != null) { Nav.opQ = null }
     Page {
-        Header("📝 Opérations", right = {
+        Header("Opérations", icon = { TabIcon(R.drawable.nav_ops) }, right = {
             Box(Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(if (q != null) K.Ac else K.Sf2)
                 .clickable { Nav.opQ = if (q == null) "" else null }, contentAlignment = Alignment.Center) {
                 T(if (q == null) "🔍" else "✕", if (q == null) 16.sp else 17.sp, if (q == null) K.Tx2 else Color.White)
@@ -252,7 +252,7 @@ fun PokeScreen() {
     val txs = s.tx.filter { it.mois == ym && Logic.cat(s, it) == Cats.POKE }.sortedByDescending { it.date }
     val total = txs.filter { it.sens == DEBIT }.sumOf { it.montant }
     Page {
-        Header("Pokémon TCG", icon = { Image(painterResource(R.drawable.poke), null, Modifier.height(30.dp).clip(RoundedCornerShape(3.dp))) })
+        Header("Pokémon TCG", icon = { TabIcon(R.drawable.nav_poke) })
         Hero {
             HeroLabel("Total dépensé Pokémon TCG")
             HeroAmount((if (total > 0) "- " else "") + Logic.fmt(total))
@@ -271,7 +271,7 @@ fun PokeScreen() {
 fun CreditsScreen() {
     val s = Db.s; val today = Db.today; val t = Logic.crTotaux(s, today)
     Page {
-        Header("🏛️ Crédits")
+        Header("Crédits", icon = { TabIcon(R.drawable.nav_cred) })
         Hero {
             HeroLabel("Capital restant dû")
             HeroAmount(Logic.fmt(t.cap))
