@@ -184,7 +184,7 @@ fun TxRow(s: St, t: Tx, pointage: Boolean = true, onClick: () -> Unit) {
         IconBox(c, t.sens)
         Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
             T(t.libelle, 14.sp, K.Tx, FontWeight.SemiBold, lines = 1)
-            T("$c · ${Logic.fmtD(t.date)}", 11.5.sp, K.Tx2, lines = 1)
+            T("$c · ${Logic.fmtD(t.date).let { it.take(6) + it.takeLast(2) }}", 11.5.sp, K.Tx2, lines = 1)
         }
         T((if (t.sens == CREDIT) "+" else "-") + Logic.fmt(t.montant), 14.sp, if (t.sens == CREDIT) K.Gr else K.Re, FontWeight.Bold)
         if (pointage) { Spacer(Modifier.width(10.dp)); Pointe(t) }

@@ -169,4 +169,14 @@ class LogicTest {
         assertEquals(true, Json.parse(Json.write(s)).tx[0].pointe); assertNull(Json.parse(Json.write(s)).tx[1].pointe)
         s = Logic.togglePointe(s, 1); assertNull(s.tx[0].pointe)
     }
+
+    @Test fun alerteBudget() {
+        val s = St(tx = listOf(Tx(1, "2026-12-02", "Leclerc", 368.0, "Alimentation", DEBIT)), bud = mapOf("Alimentation" to 400.0))
+        assertEquals("⚠️ Alimentation : 92 % du budget (32,00 € restants)" to false, Logic.budAlert(s, "Alimentation", "2026-12"))
+        val s2 = s.copy(tx = s.tx + Tx(2, "2026-12-03", "Lidl", 50.0, "Alimentation", DEBIT))
+        assertEquals("⛔ Alimentation : budget dépassé de 18,00 €" to true, Logic.budAlert(s2, "Alimentation", "2026-12"))
+        assertNull(Logic.budAlert(s, "Alimentation", "2026-11"))
+        assertNull(Logic.budAlert(s, "Santé", "2026-12"))
+        assertEquals("02/12/26", Logic.fmtD("2026-12-02").let { it.take(6) + it.takeLast(2) })
+    }
 }

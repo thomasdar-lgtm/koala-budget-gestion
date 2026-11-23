@@ -57,7 +57,7 @@ import kotlinx.coroutines.delay
 object Nav {
     var tab by mutableStateOf("home")
     var sheet by mutableStateOf<Sheet?>(null)
-    var notif by mutableStateOf<Pair<String, Boolean>?>(null)
+    var notif by mutableStateOf<Pair<String, Boolean?>?>(null)   // true = erreur, null = avertissement
     var notifN by mutableStateOf(0)
     var ask by mutableStateOf<Ask?>(null)
     var importReq by mutableStateOf(0)
@@ -79,6 +79,7 @@ object Nav {
     fun open(s: Sheet) { sheet = s }
     fun close() { sheet = null }
     fun notify(msg: String, err: Boolean = false) { notif = msg to err; notifN++ }
+    fun warn(msg: String) { notif = msg to null; notifN++ }
     fun confirm(title: String, text: String, ok: String, action: () -> Unit) { ask = Ask(title, text, ok, action) }
 }
 
@@ -203,11 +204,11 @@ private fun NotifHost(modifier: Modifier) {
     val n = Nav.notif
     var visible by androidx.compose.runtime.remember { mutableStateOf(false) }
     LaunchedEffect(Nav.notifN) {
-        if (Nav.notifN > 0) { visible = true; delay(2200); visible = false }
+        if (Nav.notifN > 0) { visible = true; delay(if (Nav.notif?.second == false) 2200 else 3500); visible = false }
     }
     AnimatedVisibility(visible && n != null, modifier.statusBarsPadding().padding(top = 10.dp),
         enter = slideInVertically { -it } + fadeIn(), exit = slideOutVertically { -it } + fadeOut()) {
-        val c = if (n?.second == true) K.Re else K.Gr
+        val c = when (n?.second) { true -> K.Re; null -> K.Ye; else -> K.Gr }
         Box(Modifier.clip(RoundedCornerShape(10.dp)).background(K.Sf).border(1.dp, c, RoundedCornerShape(10.dp))
             .padding(horizontal = 18.dp, vertical = 10.dp)) { T(n?.first ?: "", 13.sp, c, FontWeight.SemiBold) }
     }

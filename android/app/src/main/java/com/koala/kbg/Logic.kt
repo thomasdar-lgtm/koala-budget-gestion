@@ -286,6 +286,19 @@ object Logic {
         )
     }
 
+    /** budget d'une catégorie pour un mois (null si pas de budget) */
+    fun budOf(s: St, cat: String, ym: String): Bud? = budList(s, ym).find { it.cat == cat }
+
+    /** message après une saisie : 80 % atteints ou budget dépassé (null sinon) ; second = dépassé */
+    fun budAlert(s: St, cat: String, ym: String): Pair<String, Boolean>? {
+        val b = budOf(s, cat, ym) ?: return null
+        return when {
+            b.sp > b.bud + 0.004 -> "⛔ $cat : budget dépassé de ${fmt(b.sp - b.bud)}" to true
+            b.pct >= 0.8 -> "⚠️ $cat : ${Math.round(b.pct * 100)} % du budget (${fmt(b.bud - b.sp)} restants)" to false
+            else -> null
+        }
+    }
+
     // ── pointage ────────────────────────────────────────────
     fun togglePointe(s: St, id: Long): St =
         s.copy(tx = s.tx.map { if (it.id == id) it.copy(pointe = if (it.pointe == true) null else true) else it })

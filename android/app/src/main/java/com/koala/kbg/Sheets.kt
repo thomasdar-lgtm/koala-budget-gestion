@@ -241,6 +241,14 @@ internal fun AddTxSheet() {
     }
     Sec("Catégorie")
     CatPicker(Cats.of(sens), cat) { cat = it }
+    if (sens == DEBIT && !rec && cat.isNotEmpty()) Logic.budOf(s, cat, dm)?.let { b ->
+        val rest = b.bud - b.sp
+        Row(Modifier.fillMaxWidth().padding(bottom = 12.dp).clip(RoundedCornerShape(10.dp)).background(K.Sf2).padding(horizontal = 12.dp, vertical = 9.dp)) {
+            T("Budget ${Logic.MFR[dm.substring(5, 7).toInt() - 1].lowercase()} : ${Math.round(b.sp)} / ${Math.round(b.bud)} €", 12.5.sp, K.Tx2, modifier = Modifier.weight(1f))
+            T(if (rest >= 0) "reste ${Logic.fmt(rest)}" else "dépassé de ${Logic.fmt(rest)}", 12.5.sp,
+                if (rest < 0) K.Re else if (b.pct >= 0.8) K.Ye else K.Gr, FontWeight.Bold)
+        }
+    }
     if (sens == DEBIT && !rec) CheckRow(carte, "💳 Payé par carte", "(prélevé fin de mois)") { carte = !carte }
     CheckRow(rec, "Opération récurrente (tous les mois)") { rec = !rec }
     if (rec) Field(jour, { jour = it }, "Jour du mois", number = true, placeholder = "ex : 5")
@@ -258,7 +266,12 @@ internal fun AddTxSheet() {
                 st.copy(tx = st.tx + Tx(Logic.nextId(st), date, lib.trim(), Logic.r2(v), cat, sens, "manuel", dm,
                     carte = if (sens == DEBIT) carte else false))
             }
-            Nav.notify((if (sens == DEBIT) "💸 " else "💰 ") + Logic.fmt(v) + " enregistré(e)")
+            val al = if (sens == DEBIT && cat.isNotEmpty()) Logic.budAlert(Db.s, cat, dm) else null
+            when {
+                al == null -> Nav.notify((if (sens == DEBIT) "💸 " else "💰 ") + Logic.fmt(v) + " enregistré(e)")
+                al.second -> Nav.notify(al.first, true)
+                else -> Nav.warn(al.first)
+            }
         }
         Nav.close()
     }
