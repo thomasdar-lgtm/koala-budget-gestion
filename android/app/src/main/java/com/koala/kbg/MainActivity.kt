@@ -157,7 +157,7 @@ fun KbgApp() {
 }
 
 @Composable
-private fun BottomNav() {
+internal fun BottomNav() {
     Row(Modifier.fillMaxWidth().background(K.Sf).border(width = 1.dp, color = K.Bd, shape = RoundedCornerShape(0.dp))
         .navigationBarsPadding().padding(top = 6.dp, bottom = 8.dp)) {
         listOf("home" to "Aujourd'hui", "saisie" to "Opérations", "pokemon" to "Pokémon", "credits" to "Crédits", "analyse" to "Analyse").forEach { (k, l) ->

@@ -31,6 +31,9 @@ object Db {
         tick()
     }
 
+    /** captures d'écran (tests) : état fixé, sans fichier */
+    fun preview(st: St, day: LocalDate) { s = st; today = day }
+
     /** à l'ouverture et au retour dans l'appli : nouveau jour, récurrentes passées cochées, copie du jour */
     fun tick() {
         today = LocalDate.now()

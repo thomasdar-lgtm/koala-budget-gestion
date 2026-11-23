@@ -70,7 +70,7 @@ fun SheetHost() {
 
 // ═══ MENU ══════════════════════════════════════════════════
 @Composable
-private fun MenuSheet() {
+internal fun MenuSheet() {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     var majS by remember { mutableStateOf("installée : v" + BuildConfig.VERSION_NAME) }
@@ -97,7 +97,7 @@ private fun MenuSheet() {
 
 // ═══ SOLDE BANCAIRE ════════════════════════════════════════
 @Composable
-private fun SoldeSheet() {
+internal fun SoldeSheet() {
     val s = Db.s; val a = s.solde
     var amt by remember { mutableStateOf("") }
     var date by remember { mutableStateOf(Logic.ds(Db.today)) }
@@ -134,7 +134,7 @@ private fun SoldeSheet() {
 
 // ═══ BUDGETS ═══════════════════════════════════════════════
 @Composable
-private fun BudgetsSheet() {
+internal fun BudgetsSheet() {
     val vals = remember { Cats.DEP.associateWith { mutableStateOf(numStr(Db.s.bud[it])) } }
     SheetTitle("Budgets mensuels", "Plafond par mois. Laisse vide pour ne pas suivre une catégorie.")
     Cats.DEP.forEach { c ->
@@ -155,7 +155,7 @@ private fun BudgetsSheet() {
 
 // ═══ SAUVEGARDES ═══════════════════════════════════════════
 @Composable
-private fun BackupsSheet() {
+internal fun BackupsSheet() {
     val ctx = LocalContext.current
     val list = remember { Db.backups() }
     SheetTitle("Sauvegardes", "Une copie par jour sur ce téléphone, gardée 30 jours. « Partager » l'envoie ailleurs (Drive, Gmail…).")
@@ -190,7 +190,7 @@ private fun bkLabel(b: Store.Info): Pair<String, String> {
 
 // ═══ NOUVELLE OPÉRATION ════════════════════════════════════
 @Composable
-private fun AddTxSheet() {
+internal fun AddTxSheet() {
     val s = Db.s; val today = Db.today
     var sens by remember { mutableStateOf(DEBIT) }
     var amt by remember { mutableStateOf("") }
@@ -257,7 +257,7 @@ private fun AddTxSheet() {
 
 // ═══ MODIFIER UNE OPÉRATION ════════════════════════════════
 @Composable
-private fun EditTxSheet(id: Long) {
+internal fun EditTxSheet(id: Long) {
     val t0 = Db.s.tx.find { it.id == id } ?: run { Nav.close(); return }
     var lib by remember { mutableStateOf(t0.libelle) }
     var amt by remember { mutableStateOf(numStr(t0.montant)) }
@@ -292,7 +292,7 @@ private fun EditTxSheet(id: Long) {
 
 // ═══ RÉCURRENTE ════════════════════════════════════════════
 @Composable
-private fun RecEditSheet(id: String?) {
+internal fun RecEditSheet(id: String?) {
     val r0 = id?.let { i -> Db.s.rec.find { it.id == i } }
     var lib by remember { mutableStateOf(r0?.libelle ?: "") }
     var amt by remember { mutableStateOf(numStr(r0?.montant)) }
@@ -325,7 +325,7 @@ private fun RecEditSheet(id: String?) {
 }
 
 @Composable
-private fun RecMonthSheet(rid: String, ym: String) {
+internal fun RecMonthSheet(rid: String, ym: String) {
     val s = Db.s
     val r = s.rec.find { it.id == rid } ?: run { Nav.close(); return }
     val t = Logic.recTxOf(s, r, ym)
@@ -342,7 +342,7 @@ private fun RecMonthSheet(rid: String, ym: String) {
 
 // ═══ CRÉDITS ═══════════════════════════════════════════════
 @Composable
-private fun CreditDetailSheet(id: String) {
+internal fun CreditDetailSheet(id: String) {
     val c = Db.s.cred.find { it.id == id } ?: run { Nav.close(); return }
     val e = Logic.crEtat(c, Db.today)
     SheetTitle(c.nom)
@@ -390,7 +390,7 @@ private fun CreditDetailSheet(id: String) {
 }
 
 @Composable
-private fun CreditEditSheet(id: String?) {
+internal fun CreditEditSheet(id: String?) {
     val c = id?.let { i -> Db.s.cred.find { it.id == i } }
     var nom by remember { mutableStateOf(c?.nom ?: "") }
     var mt by remember { mutableStateOf(numStr(c?.montant)) }
