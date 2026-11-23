@@ -44,6 +44,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
@@ -195,14 +196,12 @@ internal fun BottomNav() {
             Column(Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).clickable { Nav.go(k) }.padding(vertical = 4.dp),
                 horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(Modifier.clip(RoundedCornerShape(8.dp)).background(if (on) K.Ac.copy(alpha = 0.15f) else Color.Transparent)
-                    .padding(horizontal = 12.dp, vertical = 2.dp), contentAlignment = Alignment.Center) {
-                    when (k) {
-                        "home" -> T("🏠", 20.sp)
-                        "saisie" -> T("📝", 20.sp)
-                        "pokemon" -> Image(painterResource(R.drawable.poke), null, Modifier.height(24.dp).clip(RoundedCornerShape(2.dp)))
-                        "credits" -> T("🏛️", 20.sp)
-                        else -> T("📊", 20.sp)
+                    .padding(horizontal = 14.dp, vertical = 3.dp), contentAlignment = Alignment.Center) {
+                    val ico = when (k) {
+                        "home" -> R.drawable.nav_home; "saisie" -> R.drawable.nav_ops; "pokemon" -> R.drawable.nav_poke
+                        "credits" -> R.drawable.nav_cred; else -> R.drawable.nav_ana
                     }
+                    Image(painterResource(ico), l, Modifier.size(26.dp).alpha(if (on) 1f else 0.5f))
                 }
                 Spacer(Modifier.height(2.dp))
                 T(l, 10.sp, if (on) K.Ac else K.Tx2, if (on) FontWeight.Bold else FontWeight.Normal, lines = 1)
