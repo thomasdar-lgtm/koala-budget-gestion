@@ -252,7 +252,7 @@ fun DateField(label: String, value: String, modifier: Modifier = Modifier, onCha
             .clickable {
                 val d = runCatching { LocalDate.parse(value) }.getOrDefault(LocalDate.now())
                 DatePickerDialog(ctx, { _, y, m, dd -> onChange(LocalDate.of(y, m + 1, dd).toString()) }, d.year, d.monthValue - 1, d.dayOfMonth).show()
-            }.padding(horizontal = 14.dp, vertical = 14.dp)) {
+            }.height(52.dp).padding(horizontal = 14.dp), contentAlignment = Alignment.CenterStart) {
             T(if (value.length == 10) Logic.fmtD(value) else "Choisir…", 15.sp, if (value.length == 10) K.Tx else K.Tx3)
         }
     }

@@ -223,7 +223,7 @@ internal fun AddTxSheet() {
         DateField("Date", date, Modifier.weight(1f)) { date = it; dm = it.take(7) }
         Column(Modifier.weight(1f)) {
             T("Mois rattaché", 11.sp, K.Tx3, modifier = Modifier.padding(bottom = 4.dp))
-            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(K.Sf2).padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().height(52.dp).clip(RoundedCornerShape(10.dp)).background(K.Sf2), verticalAlignment = Alignment.CenterVertically) {
                 T("‹", 22.sp, K.Tx2, modifier = Modifier.padding(horizontal = 10.dp).tap { dm = Logic.prevM(dm) })
                 T(Logic.MFR[dm.substring(5, 7).toInt() - 1] + " " + dm.take(4), 14.sp, K.Tx, FontWeight.SemiBold, Modifier.weight(1f), TextAlign.Center)
                 T("›", 22.sp, K.Tx2, modifier = Modifier.padding(horizontal = 10.dp).tap { dm = Logic.nextM(dm) })
