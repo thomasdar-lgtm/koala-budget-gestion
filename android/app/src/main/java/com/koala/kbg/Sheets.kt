@@ -535,10 +535,13 @@ internal fun PaieEditSheet(ym0: String?) {
 @Composable
 internal fun PaieLotSheet() {
     val lots = Nav.lot
-    // non reconnu : mois par défaut, en reculant d'un mois par bulletin pour éviter les doublons
+    // non reconnu : premier mois libre en partant du mois par défaut (ni reconnu ailleurs, ni déjà proposé)
     val mois = remember {
+        val pris = lots.mapNotNull { it.ym }.toMutableSet()
         var d = Logic.paieMoisDefaut(Db.today)
-        androidx.compose.runtime.mutableStateListOf(*lots.map { l -> l.ym ?: d.also { d = Logic.prevM(d) } }.toTypedArray())
+        androidx.compose.runtime.mutableStateListOf(*lots.map { l ->
+            l.ym ?: run { while (d in pris) d = Logic.prevM(d); pris += d; d }
+        }.toTypedArray())
     }
     val nets = remember { androidx.compose.runtime.mutableStateListOf(*Array(lots.size) { "" }) }
     SheetTitle("${lots.size} bulletins à ranger", "Vérifie le mois de chacun (« à vérifier » = pas reconnu), le net est facultatif.")
@@ -550,8 +553,8 @@ internal fun PaieLotSheet() {
                 if (l.ym == null) T(" à vérifier", 11.5.sp, K.Ye, FontWeight.Bold) else T(" reconnu ✓", 11.5.sp, K.Gr, FontWeight.Bold)
             }
             Spacer(Modifier.height(6.dp))
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(10.dp)).background(K.Sf2), verticalAlignment = Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.weight(1f).padding(top = 8.dp).height(56.dp).clip(RoundedCornerShape(10.dp)).background(K.Sf2), verticalAlignment = Alignment.CenterVertically) {
                     T("‹", 22.sp, K.Tx2, modifier = Modifier.padding(horizontal = 12.dp).tap { mois[i] = Logic.prevM(mois[i]) })
                     T(Logic.fmtM(mois[i]), 13.5.sp, K.Tx, FontWeight.SemiBold, Modifier.weight(1f), TextAlign.Center)
                     T("›", 22.sp, K.Tx2, modifier = Modifier.padding(horizontal = 12.dp).tap { mois[i] = Logic.nextM(mois[i]) })
