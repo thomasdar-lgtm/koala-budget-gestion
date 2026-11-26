@@ -1,6 +1,7 @@
 package com.koala.kbg
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -470,7 +471,7 @@ internal fun PaiesSheet() {
     SheetTitle("Bulletins de paie", "Rangés dans KBG (protégés par l'empreinte). « Partager » en envoie une copie vers Drive, Gmail…")
     Btn("＋ Ajouter un bulletin (PDF)") { Db.dropStaged(); Nav.close(); Nav.paieReq++ }
     Spacer(Modifier.height(14.dp))
-    if (s.paie.isEmpty()) T("Aucun bulletin pour l'instant", 12.5.sp, K.Tx3, Modifier.fillMaxWidth().padding(vertical = 14.dp), align = TextAlign.Center)
+    if (s.paie.isEmpty()) T("Aucun bulletin pour l'instant", 12.5.sp, K.Tx3, modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp), align = TextAlign.Center)
     Logic.paieParAn(s).forEach { (y, l, tot) ->
         Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             T(y, 15.sp, K.Tx, FontWeight.ExtraBold, Modifier.weight(1f))
