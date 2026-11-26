@@ -89,5 +89,10 @@ class ScreensShot {
         paparazzi.snapshot("16_paies") { KbgTheme { Column(Modifier.fillMaxSize().background(K.Sf).padding(18.dp)) { PaiesSheet() } } } }
     @Test fun paieEdit() { Db.preview(Logic.setPaie(sample(), Paie("2026-11", 1912.4)), day)
         paparazzi.snapshot("17_paie_edit") { KbgTheme { Column(Modifier.fillMaxSize().background(K.Sf).padding(18.dp)) { PaieEditSheet("2026-11") } } } }
+    @Test fun paieLot() { Db.preview(Logic.setPaie(sample(), Paie("2026-10", 1887.15)), day)
+        val d = java.nio.file.Files.createTempDirectory("lot").toFile()
+        Nav.lot = listOf(Db.Lot(java.io.File(d, "0.pdf"), "Bulletin_novembre_2026.pdf", "2026-11"), Db.Lot(java.io.File(d, "1.pdf"), "BS_2026-10.pdf", "2026-10"),
+            Db.Lot(java.io.File(d, "2.pdf"), "scan_0042.pdf", null))
+        paparazzi.snapshot("18_paie_lot") { KbgTheme { Column(Modifier.fillMaxSize().background(K.Sf).padding(18.dp)) { PaieLotSheet() } } }; Nav.lot = emptyList() }
     @Test fun solde() = shot("10_solde") { SheetFrame { SoldeSheet() } }
 }

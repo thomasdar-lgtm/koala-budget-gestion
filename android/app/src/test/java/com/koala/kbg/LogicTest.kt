@@ -193,4 +193,28 @@ class LogicTest {
         assertEquals("2026-10", Logic.paieMoisDefaut(LocalDate.of(2026, 11, 5)))
         assertEquals("2026-11", Logic.paieMoisDefaut(LocalDate.of(2026, 11, 26)))
     }
+
+    @Test fun moisDesBulletins() {
+        assertEquals("2026-11", Logic.moisDepuisNom("Bulletin_novembre_2026.pdf"))
+        assertEquals("2026-02", Logic.moisDepuisNom("BS Février 2026.pdf"))
+        assertEquals("2026-09", Logic.moisDepuisNom("paie-sept-2026.pdf"))
+        assertEquals("2026-11", Logic.moisDepuisNom("BS_2026-11.pdf"))
+        assertEquals("2026-11", Logic.moisDepuisNom("20261125_bulletin.pdf"))
+        assertEquals("2026-03", Logic.moisDepuisNom("bulletin_03_2026.pdf"))
+        assertEquals("2025-12", Logic.moisDepuisNom("BP122025.pdf"))
+        assertNull(Logic.moisDepuisNom("document.pdf"))
+        assertNull(Logic.moisDepuisNom("decompte.pdf"))
+        // PDF avec texte compressé
+        val content = "BT /F1 9 Tf (BULLETIN DE PAIE) Tj 0 -12 Td (Entr\\351e le 01/09/2015) Tj (P\\351riode du 01/10/2026 au 31/10/2026) Tj (Octobre 2026) Tj [(Oct) -20 (obre 2026)] TJ ET"
+        val z = java.util.zip.Deflater(); z.setInput(content.toByteArray(Charsets.ISO_8859_1)); z.finish()
+        val buf = ByteArray(4096); val n = z.deflate(buf)
+        val pdf = java.io.ByteArrayOutputStream().apply {
+            write("%PDF-1.4\n1 0 obj << /Length $n /Filter /FlateDecode >>\nstream\n".toByteArray(Charsets.ISO_8859_1))
+            write(buf, 0, n); write("\nendstream\nendobj\n%%EOF".toByteArray(Charsets.ISO_8859_1))
+        }.toByteArray()
+        assertTrue(Logic.pdfText(pdf).contains("BULLETIN DE PAIE"))
+        assertEquals("2026-10", Logic.moisBulletin("scan.pdf", pdf))
+        assertEquals("2026-10", Logic.moisDepuisTexte("Periode du 01/10/2026 au 31/10/2026"))
+        assertEquals("2026-01", Logic.moisBulletin("BS janvier 2026.pdf", pdf))
+    }
 }

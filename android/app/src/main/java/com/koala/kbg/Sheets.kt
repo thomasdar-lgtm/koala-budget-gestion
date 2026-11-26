@@ -65,6 +65,7 @@ fun SheetHost() {
                     is Sheet.CreditEdit -> CreditEditSheet(sh.id)
                     Sheet.Paies -> PaiesSheet()
                     is Sheet.PaieEdit -> PaieEditSheet(sh.ym)
+                    Sheet.PaieLot -> PaieLotSheet()
                 }
             }
         }
@@ -469,7 +470,8 @@ internal fun PaiesSheet() {
     val ctx = LocalContext.current
     val s = Db.s
     SheetTitle("Bulletins de paie", "Rangés dans KBG (protégés par l'empreinte). « Partager » en envoie une copie vers Drive, Gmail…")
-    Btn("＋ Ajouter un bulletin (PDF)") { Db.dropStaged(); Nav.close(); Nav.paieReq++ }
+    Btn("＋ Ajouter des bulletins (PDF)") { Db.dropStaged(); Nav.close(); Nav.paieMultiReq++ }
+    T("Tu peux en sélectionner plusieurs d'un coup ; le mois est reconnu tout seul quand c'est possible.", 11.sp, K.Tx3, modifier = Modifier.padding(top = 6.dp))
     Spacer(Modifier.height(14.dp))
     if (s.paie.isEmpty()) T("Aucun bulletin pour l'instant", 12.5.sp, K.Tx3, modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp), align = TextAlign.Center)
     Logic.paieParAn(s).forEach { (y, l, tot) ->
@@ -499,7 +501,7 @@ internal fun PaiesSheet() {
 @Composable
 internal fun PaieEditSheet(ym0: String?) {
     val p0 = ym0?.let { y -> Db.s.paie.find { it.ym == y } }
-    var ym by remember { mutableStateOf(p0?.ym ?: Logic.paieMoisDefaut(Db.today)) }
+    var ym by remember { mutableStateOf(p0?.ym ?: Db.stagedYm ?: Logic.paieMoisDefaut(Db.today)) }
     var net by remember { mutableStateOf(numStr(p0?.net)) }
     val nouveau = remember { Db.hasStaged() }
     SheetTitle(if (p0 != null) "Bulletin de ${Logic.fmtM(p0.ym)}" else "Nouveau bulletin",
@@ -527,4 +529,46 @@ internal fun PaieEditSheet(ym0: String?) {
             }
         }
     } else BtnGhost("Annuler") { Db.dropStaged(); Nav.open(Sheet.Paies) }
+}
+
+/** plusieurs bulletins choisis d'un coup : vérifier les mois puis tout ranger */
+@Composable
+internal fun PaieLotSheet() {
+    val lots = Nav.lot
+    // non reconnu : mois par défaut, en reculant d'un mois par bulletin pour éviter les doublons
+    val mois = remember {
+        var d = Logic.paieMoisDefaut(Db.today)
+        androidx.compose.runtime.mutableStateListOf(*lots.map { l -> l.ym ?: d.also { d = Logic.prevM(d) } }.toTypedArray())
+    }
+    val nets = remember { androidx.compose.runtime.mutableStateListOf(*Array(lots.size) { "" }) }
+    SheetTitle("${lots.size} bulletins à ranger", "Vérifie le mois de chacun (« à vérifier » = pas reconnu), le net est facultatif.")
+    lots.forEachIndexed { i, l ->
+        if (i > 0) Divider()
+        Column(Modifier.fillMaxWidth().padding(vertical = 10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                T("📄 " + l.nom, 12.sp, K.Tx2, modifier = Modifier.weight(1f), lines = 1)
+                if (l.ym == null) T(" à vérifier", 11.5.sp, K.Ye, FontWeight.Bold) else T(" reconnu ✓", 11.5.sp, K.Gr, FontWeight.Bold)
+            }
+            Spacer(Modifier.height(6.dp))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(10.dp)).background(K.Sf2), verticalAlignment = Alignment.CenterVertically) {
+                    T("‹", 22.sp, K.Tx2, modifier = Modifier.padding(horizontal = 12.dp).tap { mois[i] = Logic.prevM(mois[i]) })
+                    T(Logic.fmtM(mois[i]), 13.5.sp, K.Tx, FontWeight.SemiBold, Modifier.weight(1f), TextAlign.Center)
+                    T("›", 22.sp, K.Tx2, modifier = Modifier.padding(horizontal = 12.dp).tap { mois[i] = Logic.nextM(mois[i]) })
+                }
+                Field(nets[i], { nets[i] = it }, "Net €", Modifier.width(112.dp), number = true)
+            }
+        }
+    }
+    val doublons = mois.groupBy { it }.filter { it.value.size > 1 }.keys
+    val existants = mois.filter { m -> Db.s.paie.any { it.ym == m } }
+    if (doublons.isNotEmpty()) T("⛔ Même mois pour plusieurs bulletins : ${doublons.joinToString { Logic.fmtM(it) }}", 12.sp, K.Re, modifier = Modifier.padding(vertical = 8.dp))
+    else if (existants.isNotEmpty()) T("⚠️ Déjà rangé, sera remplacé : ${existants.joinToString { Logic.fmtM(it) }}", 12.sp, K.Ye, modifier = Modifier.padding(vertical = 8.dp))
+    Spacer(Modifier.height(6.dp))
+    Btn("✅ Ranger les ${lots.size} bulletins", bg = if (doublons.isEmpty()) K.Ac else K.Sf3) {
+        if (doublons.isNotEmpty()) { Nav.notify("Deux bulletins ont le même mois", true); return@Btn }
+        val n = Db.saveLot(lots.mapIndexed { i, l -> Triple(l.file, mois[i], num(nets[i])?.let { Logic.r2(it) }) })
+        Nav.lot = emptyList(); Nav.open(Sheet.Paies); Nav.notify("📄 $n bulletin" + (if (n > 1) "s rangés" else " rangé"))
+    }
+    BtnGhost("Annuler") { Nav.lot = emptyList(); Nav.open(Sheet.Paies) }
 }

@@ -64,6 +64,8 @@ object Nav {
     var ask by mutableStateOf<Ask?>(null)
     var importReq by mutableStateOf(0)
     var paieReq by mutableStateOf(0)
+    var paieMultiReq by mutableStateOf(0)
+    var lot by mutableStateOf<List<Db.Lot>>(emptyList())
 
     // mois affichés
     var opYM by mutableStateOf(Logic.ym(java.time.LocalDate.now()))
@@ -100,6 +102,7 @@ sealed class Sheet {
     data class CreditDetail(val id: String) : Sheet()
     data class CreditEdit(val id: String?) : Sheet()
     data object Paies : Sheet()
+    data object PaieLot : Sheet()
     data class PaieEdit(val ym: String?) : Sheet()   // null = nouveau bulletin (PDF déjà choisi)
 }
 
@@ -143,6 +146,18 @@ fun KbgApp() {
             if (Db.stagePdf(uri)) Nav.open(Sheet.PaieEdit(null)) else { Nav.notify("Ce fichier n'est pas un PDF", true); Nav.open(Sheet.Paies) }
         } else Nav.open(Sheet.Paies)
     }
+    val pickPdfs = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        when {
+            uris.isEmpty() -> Nav.open(Sheet.Paies)
+            uris.size == 1 -> if (Db.stagePdf(uris[0])) Nav.open(Sheet.PaieEdit(null)) else { Nav.notify("Ce fichier n'est pas un PDF", true); Nav.open(Sheet.Paies) }
+            else -> {
+                val (lots, refus) = Db.stageMany(uris)
+                if (refus > 0) Nav.notify("$refus fichier" + (if (refus > 1) "s ignorés (pas des PDF)" else " ignoré (pas un PDF)"), true)
+                if (lots.isEmpty()) Nav.open(Sheet.Paies) else { Nav.lot = lots; Nav.open(Sheet.PaieLot) }
+            }
+        }
+    }
+    LaunchedEffect(Nav.paieMultiReq) { if (Nav.paieMultiReq > 0) runCatching { pickPdfs.launch(arrayOf("application/pdf")) } }
     LaunchedEffect(Nav.paieReq) { if (Nav.paieReq > 0) runCatching { pickPdf.launch(arrayOf("application/pdf")) } }
     LifecycleResumeEffect(Unit) { Db.tick(); onPauseOrDispose { } }
     LaunchedEffect(Unit) {

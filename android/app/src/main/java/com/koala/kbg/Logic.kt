@@ -307,6 +307,80 @@ object Logic {
     /** par année (récente en haut) : bulletins + total net */
     fun paieParAn(s: St): List<Triple<String, List<Paie>, Double>> =
         s.paie.sortedByDescending { it.ym }.groupBy { it.ym.take(4) }.map { (y, l) -> Triple(y, l, r2(l.sumOf { it.net ?: 0.0 })) }
+    private val MOIS = listOf("janvier" to 1, "janv" to 1, "fevrier" to 2, "fevr" to 2, "fev" to 2, "mars" to 3, "avril" to 4, "avr" to 4,
+        "mai" to 5, "juin" to 6, "juillet" to 7, "juil" to 7, "aout" to 8, "septembre" to 9, "sept" to 9, "octobre" to 10, "oct" to 10,
+        "novembre" to 11, "nov" to 11, "decembre" to 12, "dec" to 12)
+    private val MOIS_RX = MOIS.joinToString("|") { it.first }
+    private val MOIS_PLEIN = MOIS.filter { it.first.length >= 4 && it.first !in listOf("janv", "fevr", "juil", "sept") }.joinToString("|") { it.first }
+    private fun moisNum(n: String) = MOIS.first { it.first == n }.second
+    private fun ymOk(y: Int, m: Int) = if (y in 2000..2099 && m in 1..12) "%04d-%02d".format(y, m) else null
+
+    /** mois d'un bulletin d'après le nom du fichier (« Bulletin_novembre_2026.pdf », « BS_2026-11 », « 112026 »…) */
+    fun moisDepuisNom(nom: String): String? {
+        val n = plain(nom)
+        Regex("(?<![a-z])($MOIS_RX)(?![a-z])[^a-z0-9]{0,3}(20\\d{2})").find(n)?.let { return ymOk(it.groupValues[2].toInt(), moisNum(it.groupValues[1])) }
+        Regex("(20\\d{2})[^a-z0-9]{0,3}($MOIS_RX)(?![a-z])").find(n)?.let { return ymOk(it.groupValues[1].toInt(), moisNum(it.groupValues[2])) }
+        Regex("(?<!\\d)(20\\d{2})[-_. ]?(0[1-9]|1[0-2])").find(n)?.let { return ymOk(it.groupValues[1].toInt(), it.groupValues[2].toInt()) }
+        Regex("(?<!\\d)(0[1-9]|1[0-2])[-_. ]?(20\\d{2})(?!\\d)").find(n)?.let { return ymOk(it.groupValues[2].toInt(), it.groupValues[1].toInt()) }
+        return null
+    }
+
+    /** mois d'un bulletin d'après son texte : « Novembre 2026 » le plus fréquent, sinon « période du 01/11/2026 » */
+    fun moisDepuisTexte(txt: String): String? {
+        val n = plain(txt)
+        val c = HashMap<String, Int>()
+        Regex("(?<![a-z])($MOIS_PLEIN)(?![a-z])\\s{0,3}(20\\d{2})").findAll(n).forEach { m ->
+            ymOk(m.groupValues[2].toInt(), moisNum(m.groupValues[1]))?.let { c[it] = (c[it] ?: 0) + 1 }
+        }
+        c.maxByOrNull { it.value }?.let { return it.key }
+        Regex("(periode|du)[^0-9]{0,12}(\\d{2})/(\\d{2})/(20\\d{2})").find(n)?.let { return ymOk(it.groupValues[4].toInt(), it.groupValues[3].toInt()) }
+        return null
+    }
+
+    /** texte lisible d'un PDF (meilleur effort : chaînes ( ) des flux, compressés ou non) */
+    fun pdfText(b: ByteArray): String {
+        val raw = String(b, Charsets.ISO_8859_1)
+        val parts = StringBuilder()
+        var i = 0
+        while (true) {
+            val s = raw.indexOf("stream", i); if (s < 0) break
+            var a = s + 6
+            if (a < raw.length && raw[a] == '\r') a++
+            if (a < raw.length && raw[a] == '\n') a++
+            val e = raw.indexOf("endstream", a); if (e < 0) break
+            val chunk = b.copyOfRange(a, e)
+            val inf = runCatching {
+                val z = java.util.zip.Inflater(); z.setInput(chunk)
+                val out = java.io.ByteArrayOutputStream(); val buf = ByteArray(8192)
+                while (!z.finished()) { val n = z.inflate(buf); if (n == 0 && (z.needsInput() || z.needsDictionary())) break; out.write(buf, 0, n) }
+                z.end(); String(out.toByteArray(), Charsets.ISO_8859_1)
+            }.getOrNull()
+            parts.append(strings(inf ?: String(chunk, Charsets.ISO_8859_1))).append(' ')
+            i = e + 9
+        }
+        return parts.toString()
+    }
+
+    /** contenu des chaînes PDF entre parenthèses, mis bout à bout */
+    private fun strings(s: String): String {
+        val sb = StringBuilder(); var depth = 0; var k = 0
+        while (k < s.length) {
+            val ch = s[k]
+            when {
+                ch == '\\' && depth > 0 && k + 1 < s.length -> { val nx = s[k + 1]; sb.append(when (nx) { 'n' -> ' '; 'r' -> ' '; 't' -> ' '; else -> nx }); k++ }
+                ch == '(' -> { if (depth > 0) sb.append(ch); depth++ }
+                ch == ')' && depth > 0 -> { depth--; if (depth > 0) sb.append(ch) else sb.append(' ') }
+                depth > 0 -> sb.append(ch)
+                ch == ']' || (ch == 'T' && k + 1 < s.length && (s[k + 1] == '*' || s[k + 1] == 'd' || s[k + 1] == 'D')) -> sb.append(' ')
+            }
+            k++
+        }
+        return sb.toString()
+    }
+
+    /** mois d'un bulletin : nom du fichier, sinon contenu */
+    fun moisBulletin(nom: String, b: ByteArray?): String? = moisDepuisNom(nom) ?: b?.let { runCatching { moisDepuisTexte(pdfText(it)) }.getOrNull() }
+
     /** mois proposé pour un nouveau bulletin : le mois en cours à partir du 20, sinon le précédent */
     fun paieMoisDefaut(today: LocalDate): String = if (today.dayOfMonth >= 20) ym(today) else prevM(ym(today))
 

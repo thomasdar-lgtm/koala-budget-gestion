@@ -66,8 +66,45 @@ object Db {
     fun stagePdf(uri: Uri): Boolean = runCatching {
         val b = app.contentResolver.openInputStream(uri)!!.use { it.readBytes() }
         if (b.size < 5 || String(b, 0, 5, Charsets.ISO_8859_1) != "%PDF-") return false
-        staged().writeBytes(b); true
+        staged().writeBytes(b)
+        stagedYm = Logic.moisBulletin(nomDe(uri), b)
+        true
     }.getOrDefault(false)
+    /** mois reconnu pour le PDF en attente (null si non reconnu) */
+    var stagedYm: String? = null
+        private set
+
+    private fun nomDe(uri: Uri): String = runCatching {
+        app.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+            if (c.moveToFirst()) c.getString(0) else null
+        }
+    }.getOrNull() ?: (uri.lastPathSegment ?: "")
+
+    /** plusieurs bulletins d'un coup : chaque PDF est mis de côté avec le mois reconnu */
+    data class Lot(val file: File, val nom: String, val ym: String?)
+    fun stageMany(uris: List<Uri>): Pair<List<Lot>, Int> {
+        val dir = File(app.cacheDir, "paie_lot").apply { deleteRecursively(); mkdirs() }
+        var refus = 0
+        val lots = uris.mapIndexedNotNull { i, u ->
+            runCatching {
+                val b = app.contentResolver.openInputStream(u)!!.use { it.readBytes() }
+                if (b.size < 5 || String(b, 0, 5, Charsets.ISO_8859_1) != "%PDF-") null
+                else { val f = File(dir, "$i.pdf").apply { writeBytes(b) }; val n = nomDe(u); Lot(f, n, Logic.moisBulletin(n, b)) }
+            }.getOrNull().also { if (it == null) refus++ }
+        }
+        return lots to refus
+    }
+
+    /** range les bulletins du lot (mois choisis) ; renvoie le nombre rangé */
+    fun saveLot(items: List<Triple<File, String, Double?>>): Int {
+        var n = 0; var st = s
+        items.forEach { (f, ym, net) ->
+            val dst = paieFile(ym)
+            if (f.exists() && (f.renameTo(dst) || runCatching { f.copyTo(dst, true); f.delete() }.isSuccess)) { st = Logic.setPaie(st, Paie(ym, net)); n++ }
+        }
+        edit { st }
+        return n
+    }
     fun hasStaged() = ::app.isInitialized && staged().exists()
     fun dropStaged() { if (::app.isInitialized) staged().delete() }
 
