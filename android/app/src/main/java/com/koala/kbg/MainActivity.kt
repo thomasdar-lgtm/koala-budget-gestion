@@ -63,6 +63,7 @@ object Nav {
     var notifN by mutableStateOf(0)
     var ask by mutableStateOf<Ask?>(null)
     var importReq by mutableStateOf(0)
+    var paieReq by mutableStateOf(0)
 
     // mois affichés
     var opYM by mutableStateOf(Logic.ym(java.time.LocalDate.now()))
@@ -98,6 +99,8 @@ sealed class Sheet {
     data class RecMonth(val rid: String, val ym: String) : Sheet()
     data class CreditDetail(val id: String) : Sheet()
     data class CreditEdit(val id: String?) : Sheet()
+    data object Paies : Sheet()
+    data class PaieEdit(val ym: String?) : Sheet()   // null = nouveau bulletin (PDF déjà choisi)
 }
 
 class MainActivity : FragmentActivity() {
@@ -135,6 +138,12 @@ fun KbgApp() {
     LaunchedEffect(Nav.importReq) {
         if (Nav.importReq > 0) runCatching { pick.launch(arrayOf("application/json", "application/octet-stream", "text/plain", "*/*")) }
     }
+    val pickPdf = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            if (Db.stagePdf(uri)) Nav.open(Sheet.PaieEdit(null)) else { Nav.notify("Ce fichier n'est pas un PDF", true); Nav.open(Sheet.Paies) }
+        } else Nav.open(Sheet.Paies)
+    }
+    LaunchedEffect(Nav.paieReq) { if (Nav.paieReq > 0) runCatching { pickPdf.launch(arrayOf("application/pdf")) } }
     LifecycleResumeEffect(Unit) { Db.tick(); onPauseOrDispose { } }
     LaunchedEffect(Unit) {
         while (true) {

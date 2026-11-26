@@ -85,5 +85,9 @@ class ScreensShot {
     @Test fun verrouEnCours() { Lock.prompting = true; shot("15_verrou_empreinte") { KbgTheme { LockScreen { } } }; Lock.prompting = false }
     @Test fun bilanAccueil() { Db.preview(sample(), LocalDate.of(2027, 1, 3)); Nav.tab = "home"; Nav.bilanVu = null; paparazzi.snapshot("13_bilan_accueil") { Frame { HomeScreen() } } }
     @Test fun bilanAnalyse() { Nav.anTab = "bilan"; Nav.anYM = "2026-12"; shot("14_bilan_analyse", "analyse") { Frame { AnalyseScreen() } }; Nav.anTab = "cat"; Nav.anYM = null }
+    @Test fun paies() { Db.preview(sample().let { Logic.setPaie(Logic.setPaie(Logic.setPaie(it, Paie("2026-11", 1912.4)), Paie("2026-10", 1887.15)), Paie("2025-12", 1840.0)) }, day)
+        paparazzi.snapshot("16_paies") { KbgTheme { Column(Modifier.fillMaxSize().background(K.Sf).padding(18.dp)) { PaiesSheet() } } } }
+    @Test fun paieEdit() { Db.preview(Logic.setPaie(sample(), Paie("2026-11", 1912.4)), day)
+        paparazzi.snapshot("17_paie_edit") { KbgTheme { Column(Modifier.fillMaxSize().background(K.Sf).padding(18.dp)) { PaieEditSheet("2026-11") } } } }
     @Test fun solde() = shot("10_solde") { SheetFrame { SoldeSheet() } }
 }

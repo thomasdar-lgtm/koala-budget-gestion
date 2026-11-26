@@ -55,6 +55,9 @@ data class Cred(
 
 data class Solde(val montant: Double, val date: String)
 
+/** bulletin de paie : le PDF est rangé à part (paie/AAAA-MM.pdf), ici le mois et le net à payer */
+data class Paie(val ym: String, val net: Double? = null)
+
 data class St(
     val tx: List<Tx> = emptyList(),
     val rec: List<Rec> = emptyList(),
@@ -63,6 +66,7 @@ data class St(
     val bud: Map<String, Double> = emptyMap(),
     val solde: Solde? = null,
     val cred: List<Cred> = emptyList(),
+    val paie: List<Paie> = emptyList(),
     val ovr: Map<String, String> = emptyMap(),   // ancienne surcharge de catégorie (version web)
     val lastSeen: String? = null,
     val updatedAt: Long = 0,
@@ -137,13 +141,21 @@ object Json {
         o.optJSONObject("bud")?.let { b -> b.keys().forEach { k -> b.num(k)?.let { if (it > 0) bud[k] = it } } }
         val ovr = LinkedHashMap<String, String>()
         o.optJSONObject("ovr")?.let { b -> b.keys().forEach { k -> (b.opt(k) as? String)?.let { ovr[k] = it } } }
+        val paie = ArrayList<Paie>()
+        o.optJSONArray("paie")?.let { a ->
+            for (i in 0 until a.length()) {
+                val p = a.optJSONObject(i) ?: continue
+                val ym = p.str("ym") ?: continue
+                paie += Paie(ym, p.num("net"))
+            }
+        }
         val solde = o.optJSONObject("solde")?.let { s ->
             val m = s.num("montant"); val d = s.str("date")
             if (m != null && d != null) Solde(m, d) else null
         }
         return St(
             tx = tx, rec = rec, recDone = months(o.optJSONObject("recDone")), recSkip = months(o.optJSONObject("recSkip")),
-            bud = bud, solde = solde, cred = cred, ovr = ovr,
+            bud = bud, solde = solde, cred = cred, paie = paie, ovr = ovr,
             lastSeen = o.str("lastSeen"), updatedAt = o.num("_updatedAt")?.toLong() ?: 0,
         )
     }
@@ -180,6 +192,9 @@ object Json {
                     c.recId?.let { put("recId", it) }
                 })
             }
+        })
+        o.put("paie", JSONArray().apply {
+            s.paie.forEach { p -> put(JSONObject().apply { put("ym", p.ym); p.net?.let { put("net", it) } }) }
         })
         fun months(m: Map<String, List<String>>) = JSONObject().apply { m.forEach { (k, v) -> put(k, JSONArray(v)) } }
         o.put("recDone", months(s.recDone))

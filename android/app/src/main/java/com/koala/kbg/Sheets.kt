@@ -62,6 +62,8 @@ fun SheetHost() {
                     is Sheet.RecMonth -> RecMonthSheet(sh.rid, sh.ym)
                     is Sheet.CreditDetail -> CreditDetailSheet(sh.id)
                     is Sheet.CreditEdit -> CreditEditSheet(sh.id)
+                    Sheet.Paies -> PaiesSheet()
+                    is Sheet.PaieEdit -> PaieEditSheet(sh.ym)
                 }
             }
         }
@@ -78,6 +80,8 @@ internal fun MenuSheet() {
     T("v" + BuildConfig.VERSION_NAME, 12.sp, K.Tx3, modifier = Modifier.padding(bottom = 6.dp))
     MenuSec("Banque")
     MenuItem("Pointer avec la banque", "solde réel et écart") { Nav.open(Sheet.Solde) }
+    MenuSec("Documents")
+    MenuItem("Bulletins de paie", Db.s.paie.size.let { if (it == 0) "aucun" else "$it bulletin" + (if (it > 1) "s" else "") }) { Nav.open(Sheet.Paies) }
     MenuSec("Données")
     MenuItem("Sauvegardes", "une par jour · 30 jours") { Nav.open(Sheet.Backups) }
     MenuItem("Partager une copie", "Drive, Gmail…") { runCatching { Db.shareCopy(ctx) }.onFailure { Nav.notify("Partage impossible", true) } }
@@ -456,4 +460,70 @@ internal fun CreditEditSheet(id: String?) {
         Db.tick()
         Nav.open(Sheet.CreditDetail(cr.id)); Nav.notify(if (c != null) "Crédit modifié" else "✅ Crédit ajouté")
     }
+}
+
+// ═══ BULLETINS DE PAIE ═════════════════════════════════════
+@Composable
+internal fun PaiesSheet() {
+    val ctx = LocalContext.current
+    val s = Db.s
+    SheetTitle("Bulletins de paie", "Rangés dans KBG (protégés par l'empreinte). « Partager » en envoie une copie vers Drive, Gmail…")
+    Btn("＋ Ajouter un bulletin (PDF)") { Db.dropStaged(); Nav.close(); Nav.paieReq++ }
+    Spacer(Modifier.height(14.dp))
+    if (s.paie.isEmpty()) T("Aucun bulletin pour l'instant", 12.5.sp, K.Tx3, Modifier.fillMaxWidth().padding(vertical = 14.dp), align = TextAlign.Center)
+    Logic.paieParAn(s).forEach { (y, l, tot) ->
+        Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            T(y, 15.sp, K.Tx, FontWeight.ExtraBold, Modifier.weight(1f))
+            if (tot > 0) { T("Net ", 12.sp, K.Tx2); T(Logic.fmt(tot), 12.5.sp, K.Gr, FontWeight.Bold) }
+        }
+        Divider()
+        l.forEach { p ->
+            val ok = remember(p.ym) { Db.paieOk(p.ym) }
+            Row(Modifier.fillMaxWidth().clickable { Nav.open(Sheet.PaieEdit(p.ym)) }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    T("📄 " + Logic.fmtM(p.ym), 14.sp, K.Tx, FontWeight.SemiBold)
+                    T(if (!ok) "fichier manquant" else p.net?.let { "net " + Logic.fmt(it) } ?: "net non renseigné", 11.5.sp, if (!ok) K.Re else K.Tx2)
+                }
+                if (ok) {
+                    SmallBtn("Ouvrir", K.Ac, androidx.compose.ui.graphics.Color.White) { if (!Db.openPaie(ctx, p.ym)) Nav.notify("Aucune appli pour lire les PDF", true) }
+                    Spacer(Modifier.width(8.dp))
+                    SmallBtn("Partager") { if (!Db.sharePaie(ctx, p.ym)) Nav.notify("Partage impossible", true) }
+                }
+            }
+            Divider()
+        }
+    }
+}
+
+@Composable
+internal fun PaieEditSheet(ym0: String?) {
+    val p0 = ym0?.let { y -> Db.s.paie.find { it.ym == y } }
+    var ym by remember { mutableStateOf(p0?.ym ?: Logic.paieMoisDefaut(Db.today)) }
+    var net by remember { mutableStateOf(numStr(p0?.net)) }
+    val nouveau = remember { Db.hasStaged() }
+    SheetTitle(if (p0 != null) "Bulletin de ${Logic.fmtM(p0.ym)}" else "Nouveau bulletin",
+        if (nouveau) "📄 PDF prêt à être rangé" else "")
+    T("Mois du bulletin", 11.sp, K.Tx3, modifier = Modifier.padding(bottom = 4.dp))
+    Row(Modifier.fillMaxWidth().padding(bottom = 10.dp).height(52.dp).clip(RoundedCornerShape(10.dp)).background(K.Sf2), verticalAlignment = Alignment.CenterVertically) {
+        T("‹", 24.sp, K.Tx2, modifier = Modifier.padding(horizontal = 16.dp).tap { ym = Logic.prevM(ym) })
+        T(Logic.fmtM(ym), 15.sp, K.Tx, FontWeight.SemiBold, Modifier.weight(1f), TextAlign.Center)
+        T("›", 24.sp, K.Tx2, modifier = Modifier.padding(horizontal = 16.dp).tap { ym = Logic.nextM(ym) })
+    }
+    Field(net, { net = it }, "Net à payer (€)", number = true, placeholder = "facultatif")
+    val autre = Db.s.paie.any { it.ym == ym && it.ym != p0?.ym }
+    if (autre) T("⚠️ Un bulletin existe déjà pour ${Logic.fmtM(ym)} : il sera remplacé.", 12.sp, K.Ye, modifier = Modifier.padding(bottom = 10.dp))
+    Btn("✅ Enregistrer") {
+        if (p0 == null && !Db.hasStaged()) { Nav.notify("Choisis d'abord le PDF", true); return@Btn }
+        val v = num(net)?.let { Logic.r2(it) }
+        if (Db.savePaie(ym, v, p0?.ym)) { Nav.open(Sheet.Paies); Nav.notify("📄 Bulletin de ${Logic.fmtM(ym)} rangé") }
+        else Nav.notify("Enregistrement impossible", true)
+    }
+    if (p0 != null) {
+        BtnGhost("📄 Remplacer le PDF") { Db.dropStaged(); Nav.close(); Nav.paieReq++ }
+        BtnDanger("🗑️ Supprimer") {
+            Nav.confirm("Supprimer ce bulletin ?", "Le PDF de ${Logic.fmtM(p0.ym)} sera effacé de KBG.", "Supprimer") {
+                Db.delPaie(p0.ym); Nav.open(Sheet.Paies); Nav.notify("Bulletin supprimé")
+            }
+        }
+    } else BtnGhost("Annuler") { Db.dropStaged(); Nav.open(Sheet.Paies) }
 }

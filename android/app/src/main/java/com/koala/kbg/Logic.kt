@@ -299,6 +299,17 @@ object Logic {
         }
     }
 
+    // ── bulletins de paie ───────────────────────────────────
+    /** ajoute ou remplace le bulletin d'un mois (old = mois d'origine si on change de mois) */
+    fun setPaie(s: St, p: Paie, old: String? = null): St =
+        s.copy(paie = (s.paie.filter { it.ym != p.ym && it.ym != old } + p).sortedByDescending { it.ym })
+    fun delPaie(s: St, ym: String): St = s.copy(paie = s.paie.filter { it.ym != ym })
+    /** par année (récente en haut) : bulletins + total net */
+    fun paieParAn(s: St): List<Triple<String, List<Paie>, Double>> =
+        s.paie.sortedByDescending { it.ym }.groupBy { it.ym.take(4) }.map { (y, l) -> Triple(y, l, r2(l.sumOf { it.net ?: 0.0 })) }
+    /** mois proposé pour un nouveau bulletin : le mois en cours à partir du 20, sinon le précédent */
+    fun paieMoisDefaut(today: LocalDate): String = if (today.dayOfMonth >= 20) ym(today) else prevM(ym(today))
+
     // ── pointage ────────────────────────────────────────────
     fun togglePointe(s: St, id: Long): St =
         s.copy(tx = s.tx.map { if (it.id == id) it.copy(pointe = if (it.pointe == true) null else true) else it })

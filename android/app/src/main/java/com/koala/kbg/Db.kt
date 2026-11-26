@@ -56,6 +56,55 @@ object Db {
         io.execute { runCatching { store.save(j) } }
     }
 
+    // ── bulletins de paie (PDF dans le stockage privé de l'appli) ──
+    private fun paieDir() = File(app.filesDir, "v2/paie").apply { mkdirs() }
+    fun paieFile(ym: String): File = File(paieDir(), "$ym.pdf")
+    private fun staged() = File(app.cacheDir, "paie_tmp.pdf")
+    fun paieOk(ym: String) = ::app.isInitialized && paieFile(ym).exists()
+
+    /** copie le PDF choisi dans un fichier temporaire ; false si ce n'est pas un PDF */
+    fun stagePdf(uri: Uri): Boolean = runCatching {
+        val b = app.contentResolver.openInputStream(uri)!!.use { it.readBytes() }
+        if (b.size < 5 || String(b, 0, 5, Charsets.ISO_8859_1) != "%PDF-") return false
+        staged().writeBytes(b); true
+    }.getOrDefault(false)
+    fun hasStaged() = ::app.isInitialized && staged().exists()
+    fun dropStaged() { if (::app.isInitialized) staged().delete() }
+
+    /** enregistre un bulletin : nouveau fichier (si choisi) et/ou changement de mois */
+    fun savePaie(ym: String, net: Double?, old: String?): Boolean {
+        val st = staged()
+        if (st.exists()) { if (!st.renameTo(paieFile(ym))) { st.copyTo(paieFile(ym), true); st.delete() } }
+        else if (old != null && old != ym && paieFile(old).exists()) paieFile(old).renameTo(paieFile(ym))
+        if (old != null && old != ym) paieFile(old).delete()
+        if (!paieFile(ym).exists()) return false
+        edit { Logic.setPaie(it, Paie(ym, net), old) }
+        return true
+    }
+
+    fun delPaie(ym: String) { paieFile(ym).delete(); edit { Logic.delPaie(it, ym) } }
+
+    fun openPaie(ctx: Context, ym: String): Boolean = runCatching {
+        val f = paieFile(ym); if (!f.exists()) return false
+        val uri = FileProvider.getUriForFile(ctx, "${ctx.packageName}.files", f)
+        ctx.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/pdf").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
+        true
+    }.getOrDefault(false)
+
+    fun sharePaie(ctx: Context, ym: String): Boolean = runCatching {
+        val f = paieFile(ym); if (!f.exists()) return false
+        val dir = File(ctx.cacheDir, "share").apply { mkdirs() }
+        dir.listFiles()?.forEach { it.delete() }
+        val name = "bulletin-paie-$ym.pdf"
+        val g = f.copyTo(File(dir, name), true)
+        val uri = FileProvider.getUriForFile(ctx, "${ctx.packageName}.files", g)
+        val send = Intent(Intent.ACTION_SEND).setType("application/pdf").putExtra(Intent.EXTRA_STREAM, uri)
+            .putExtra(Intent.EXTRA_SUBJECT, "Bulletin de paie " + Logic.fmtM(ym)).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        send.clipData = ClipData.newRawUri(name, uri)
+        ctx.startActivity(Intent.createChooser(send, "Partager le bulletin"))
+        true
+    }.getOrDefault(false)
+
     // ── import / sauvegardes / partage ──────────────────────
     fun importFrom(uri: Uri): Boolean {
         val txt = runCatching { app.contentResolver.openInputStream(uri)!!.use { it.readBytes().toString(Charsets.UTF_8) } }.getOrNull() ?: return false

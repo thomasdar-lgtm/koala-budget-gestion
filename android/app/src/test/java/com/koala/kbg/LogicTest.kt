@@ -179,4 +179,18 @@ class LogicTest {
         assertNull(Logic.budAlert(s, "Santé", "2026-12"))
         assertEquals("02/12/26", Logic.fmtD("2026-12-02").let { it.take(6) + it.takeLast(2) })
     }
+
+    @Test fun bulletins() {
+        var s = St()
+        s = Logic.setPaie(s, Paie("2026-10", 1850.25)); s = Logic.setPaie(s, Paie("2026-11", 1900.0)); s = Logic.setPaie(s, Paie("2025-12", 1700.0))
+        assertEquals(listOf("2026-11", "2026-10", "2025-12"), s.paie.map { it.ym })
+        val an = Logic.paieParAn(s); assertEquals(listOf("2026", "2025"), an.map { it.first }); eq(3750.25, an[0].third)
+        s = Logic.setPaie(s, Paie("2026-09", 1850.25), old = "2026-10")
+        assertEquals(listOf("2026-11", "2026-09", "2025-12"), s.paie.map { it.ym })
+        s = Logic.setPaie(s, Paie("2026-11", null)); assertNull(s.paie.first().net); assertEquals(3, s.paie.size)
+        assertEquals(s.paie, Json.parse(Json.write(s)).paie)
+        s = Logic.delPaie(s, "2025-12"); assertEquals(2, s.paie.size)
+        assertEquals("2026-10", Logic.paieMoisDefaut(LocalDate.of(2026, 11, 5)))
+        assertEquals("2026-11", Logic.paieMoisDefaut(LocalDate.of(2026, 11, 26)))
+    }
 }
