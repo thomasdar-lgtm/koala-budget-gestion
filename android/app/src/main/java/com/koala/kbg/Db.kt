@@ -121,16 +121,11 @@ object Db {
         return true
     }
 
-    /** bulletins déjà rangés sans net : lit le net dans leur PDF ; renvoie le nombre complété */
-    fun remplirNets(): Int {
-        var st = s; var n = 0
-        s.paie.filter { it.net == null && paieOk(it.ym) }.forEach { p ->
-            val v = runCatching { Logic.netDepuisTexte(Logic.pdfText(paieFile(p.ym).readBytes())) }.getOrNull()
-            if (v != null) { st = Logic.setPaie(st, p.copy(net = v)); n++ }
-        }
-        if (n > 0) edit { st }
-        return n
+    /** bulletins rangés sans net : net lu dans leur PDF (à lancer hors du fil principal) */
+    fun netsManquants(): List<Paie> = s.paie.filter { it.net == null && paieOk(it.ym) }.mapNotNull { p ->
+        runCatching { Logic.netDepuisTexte(Logic.pdfText(paieFile(p.ym).readBytes())) }.getOrNull()?.let { p.copy(net = it) }
     }
+    fun appliquerNets(l: List<Paie>) { if (l.isNotEmpty()) edit { st -> l.fold(st) { a, p -> if (a.paie.any { it.ym == p.ym && it.net == null }) Logic.setPaie(a, p) else a } } }
 
     fun delPaie(ym: String) { paieFile(ym).delete(); edit { Logic.delPaie(it, ym) } }
 

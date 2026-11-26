@@ -65,6 +65,8 @@ object Nav {
     var importReq by mutableStateOf(0)
     var paieReq by mutableStateOf(0)
     var paieMultiReq by mutableStateOf(0)
+    var page by mutableStateOf<String?>(null)        // écran secondaire ("paie") par-dessus les onglets
+    var paieMois by mutableStateOf<String?>(null)    // mois visé en touchant une case vide
     var lot by mutableStateOf<List<Db.Lot>>(emptyList())
 
     // mois affichés
@@ -76,7 +78,7 @@ object Nav {
     var opQ by mutableStateOf<String?>(null)   // recherche dans Opérations (null = fermée)
 
     fun go(t: String) {
-        sheet = null
+        sheet = null; page = null
         if (t == "saisie") { opYM = Logic.ym(Db.today); opQ = null }
         if (t == "pokemon") pokeYM = Logic.ym(Db.today)
         tab = t
@@ -101,7 +103,6 @@ sealed class Sheet {
     data class RecMonth(val rid: String, val ym: String) : Sheet()
     data class CreditDetail(val id: String) : Sheet()
     data class CreditEdit(val id: String?) : Sheet()
-    data object Paies : Sheet()
     data object PaieLot : Sheet()
     data class PaieEdit(val ym: String?) : Sheet()   // null = nouveau bulletin (PDF déjà choisi)
 }
@@ -143,17 +144,17 @@ fun KbgApp() {
     }
     val pickPdf = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
-            if (Db.stagePdf(uri)) Nav.open(Sheet.PaieEdit(null)) else { Nav.notify("Ce fichier n'est pas un PDF", true); Nav.open(Sheet.Paies) }
-        } else Nav.open(Sheet.Paies)
+            if (Db.stagePdf(uri)) Nav.open(Sheet.PaieEdit(null)) else Nav.notify("Ce fichier n'est pas un PDF", true)
+        }
     }
     val pickPdfs = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         when {
-            uris.isEmpty() -> Nav.open(Sheet.Paies)
-            uris.size == 1 -> if (Db.stagePdf(uris[0])) Nav.open(Sheet.PaieEdit(null)) else { Nav.notify("Ce fichier n'est pas un PDF", true); Nav.open(Sheet.Paies) }
+            uris.isEmpty() -> {}
+            uris.size == 1 -> if (Db.stagePdf(uris[0])) Nav.open(Sheet.PaieEdit(null)) else Nav.notify("Ce fichier n'est pas un PDF", true)
             else -> {
                 val (lots, refus) = Db.stageMany(uris)
                 if (refus > 0) Nav.notify("$refus fichier" + (if (refus > 1) "s ignorés (pas des PDF)" else " ignoré (pas un PDF)"), true)
-                if (lots.isEmpty()) Nav.open(Sheet.Paies) else { Nav.lot = lots; Nav.open(Sheet.PaieLot) }
+                if (lots.isNotEmpty()) { Nav.paieMois = null; Nav.lot = lots; Nav.open(Sheet.PaieLot) }
             }
         }
     }
@@ -166,14 +167,15 @@ fun KbgApp() {
             delay(6 * 3600 * 1000L)
         }
     }
-    BackHandler(enabled = Nav.sheet == null && Nav.tab != "home") { Nav.go("home") }
+    BackHandler(enabled = Nav.sheet == null && Nav.tab != "home" && Nav.page == null) { Nav.go("home") }
+    BackHandler(enabled = Nav.sheet == null && Nav.page != null) { Nav.page = null }
 
     Box(Modifier.fillMaxSize().background(K.Bg)) {
         Column(Modifier.fillMaxSize()) {
             Column(Modifier.weight(1f).statusBarsPadding()) {
                 UpdateBanner()
                 Box(Modifier.weight(1f)) {
-                    when (Nav.tab) {
+                    if (Nav.page == "paie") PaieScreen() else when (Nav.tab) {
                         "home" -> HomeScreen()
                         "saisie" -> OpsScreen()
                         "pokemon" -> PokeScreen()
@@ -182,9 +184,9 @@ fun KbgApp() {
                     }
                 }
             }
-            BottomNav()
+            if (Nav.page == null) BottomNav() else Box(Modifier.navigationBarsPadding())
         }
-        if (Nav.tab == "saisie") {
+        if (Nav.tab == "saisie" && Nav.page == null) {
             Box(Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 18.dp, bottom = 84.dp)
                 .size(58.dp).clip(RoundedCornerShape(18.dp)).background(K.Ac).clickable { Nav.open(Sheet.AddTx()) },
                 contentAlignment = Alignment.Center) { T("+", 30.sp, Color.White, FontWeight.Light) }

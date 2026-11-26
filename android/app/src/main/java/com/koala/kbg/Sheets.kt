@@ -63,7 +63,6 @@ fun SheetHost() {
                     is Sheet.RecMonth -> RecMonthSheet(sh.rid, sh.ym)
                     is Sheet.CreditDetail -> CreditDetailSheet(sh.id)
                     is Sheet.CreditEdit -> CreditEditSheet(sh.id)
-                    Sheet.Paies -> PaiesSheet()
                     is Sheet.PaieEdit -> PaieEditSheet(sh.ym)
                     Sheet.PaieLot -> PaieLotSheet()
                 }
@@ -83,7 +82,7 @@ internal fun MenuSheet() {
     MenuSec("Banque")
     MenuItem("Pointer avec la banque", "solde réel et écart") { Nav.open(Sheet.Solde) }
     MenuSec("Documents")
-    MenuItem("Bulletins de paie", Db.s.paie.size.let { if (it == 0) "aucun" else "$it bulletin" + (if (it > 1) "s" else "") }) { Nav.open(Sheet.Paies) }
+    MenuItem("Bulletins de paie", Db.s.paie.size.let { if (it == 0) "aucun" else "$it bulletin" + (if (it > 1) "s" else "") }) { Nav.close(); Nav.page = "paie" }
     MenuSec("Données")
     MenuItem("Sauvegardes", "une par jour · 30 jours") { Nav.open(Sheet.Backups) }
     MenuItem("Partager une copie", "Drive, Gmail…") { runCatching { Db.shareCopy(ctx) }.onFailure { Nav.notify("Partage impossible", true) } }
@@ -464,119 +463,3 @@ internal fun CreditEditSheet(id: String?) {
     }
 }
 
-// ═══ BULLETINS DE PAIE ═════════════════════════════════════
-@Composable
-internal fun PaiesSheet() {
-    val ctx = LocalContext.current
-    val s = Db.s
-    SheetTitle("Bulletins de paie", "Rangés dans KBG (protégés par l'empreinte). « Partager » en envoie une copie vers Drive, Gmail…")
-    Btn("＋ Ajouter des bulletins (PDF)") { Db.dropStaged(); Nav.close(); Nav.paieMultiReq++ }
-    T("Tu peux en sélectionner plusieurs d'un coup ; le mois et le net sont reconnus tout seuls quand c'est possible.", 11.sp, K.Tx3, modifier = Modifier.padding(top = 6.dp))
-    val sansNet = s.paie.count { it.net == null && Db.paieOk(it.ym) }
-    if (sansNet > 0) BtnGhost("🔎 Lire le net des bulletins sans montant ($sansNet)") {
-        val n = Db.remplirNets()
-        if (n > 0) Nav.notify("Net trouvé pour $n bulletin" + (if (n > 1) "s" else "")) else Nav.notify("Aucun net trouvé dans ces PDF", true)
-    }
-    Spacer(Modifier.height(14.dp))
-    if (s.paie.isEmpty()) T("Aucun bulletin pour l'instant", 12.5.sp, K.Tx3, modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp), align = TextAlign.Center)
-    Logic.paieParAn(s).forEach { (y, l, tot) ->
-        Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            T(y, 15.sp, K.Tx, FontWeight.ExtraBold, Modifier.weight(1f))
-            if (tot > 0) { T("Net ", 12.sp, K.Tx2); T(Logic.fmt(tot), 12.5.sp, K.Gr, FontWeight.Bold) }
-        }
-        Divider()
-        l.forEach { p ->
-            val ok = remember(p.ym) { Db.paieOk(p.ym) }
-            Row(Modifier.fillMaxWidth().clickable { Nav.open(Sheet.PaieEdit(p.ym)) }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    T("📄 " + Logic.fmtM(p.ym), 14.sp, K.Tx, FontWeight.SemiBold)
-                    T(if (!ok) "fichier manquant" else p.net?.let { "net " + Logic.fmt(it) } ?: "net non renseigné", 11.5.sp, if (!ok) K.Re else K.Tx2)
-                }
-                if (ok) {
-                    SmallBtn("Ouvrir", K.Ac, androidx.compose.ui.graphics.Color.White) { if (!Db.openPaie(ctx, p.ym)) Nav.notify("Aucune appli pour lire les PDF", true) }
-                    Spacer(Modifier.width(8.dp))
-                    SmallBtn("Partager") { if (!Db.sharePaie(ctx, p.ym)) Nav.notify("Partage impossible", true) }
-                }
-            }
-            Divider()
-        }
-    }
-}
-
-@Composable
-internal fun PaieEditSheet(ym0: String?) {
-    val p0 = ym0?.let { y -> Db.s.paie.find { it.ym == y } }
-    var ym by remember { mutableStateOf(p0?.ym ?: Db.stagedYm ?: Logic.paieMoisDefaut(Db.today)) }
-    var net by remember { mutableStateOf(numStr(p0?.net ?: if (Db.hasStaged()) Db.stagedNet else null)) }
-    val nouveau = remember { Db.hasStaged() }
-    SheetTitle(if (p0 != null) "Bulletin de ${Logic.fmtM(p0.ym)}" else "Nouveau bulletin",
-        if (nouveau) "📄 PDF prêt à être rangé" else "")
-    T("Mois du bulletin", 11.sp, K.Tx3, modifier = Modifier.padding(bottom = 4.dp))
-    Row(Modifier.fillMaxWidth().padding(bottom = 10.dp).height(52.dp).clip(RoundedCornerShape(10.dp)).background(K.Sf2), verticalAlignment = Alignment.CenterVertically) {
-        T("‹", 24.sp, K.Tx2, modifier = Modifier.padding(horizontal = 16.dp).tap { ym = Logic.prevM(ym) })
-        T(Logic.fmtM(ym), 15.sp, K.Tx, FontWeight.SemiBold, Modifier.weight(1f), TextAlign.Center)
-        T("›", 24.sp, K.Tx2, modifier = Modifier.padding(horizontal = 16.dp).tap { ym = Logic.nextM(ym) })
-    }
-    Field(net, { net = it }, "Net à payer (€)", number = true, placeholder = "facultatif")
-    val autre = Db.s.paie.any { it.ym == ym && it.ym != p0?.ym }
-    if (autre) T("⚠️ Un bulletin existe déjà pour ${Logic.fmtM(ym)} : il sera remplacé.", 12.sp, K.Ye, modifier = Modifier.padding(bottom = 10.dp))
-    Btn("✅ Enregistrer") {
-        if (p0 == null && !Db.hasStaged()) { Nav.notify("Choisis d'abord le PDF", true); return@Btn }
-        val v = num(net)?.let { Logic.r2(it) }
-        if (Db.savePaie(ym, v, p0?.ym)) { Nav.open(Sheet.Paies); Nav.notify("📄 Bulletin de ${Logic.fmtM(ym)} rangé") }
-        else Nav.notify("Enregistrement impossible", true)
-    }
-    if (p0 != null) {
-        BtnGhost("📄 Remplacer le PDF") { Db.dropStaged(); Nav.close(); Nav.paieReq++ }
-        BtnDanger("🗑️ Supprimer") {
-            Nav.confirm("Supprimer ce bulletin ?", "Le PDF de ${Logic.fmtM(p0.ym)} sera effacé de KBG.", "Supprimer") {
-                Db.delPaie(p0.ym); Nav.open(Sheet.Paies); Nav.notify("Bulletin supprimé")
-            }
-        }
-    } else BtnGhost("Annuler") { Db.dropStaged(); Nav.open(Sheet.Paies) }
-}
-
-/** plusieurs bulletins choisis d'un coup : vérifier les mois puis tout ranger */
-@Composable
-internal fun PaieLotSheet() {
-    val lots = Nav.lot
-    // non reconnu : premier mois libre en partant du mois par défaut (ni reconnu ailleurs, ni déjà proposé)
-    val mois = remember {
-        val pris = lots.mapNotNull { it.ym }.toMutableSet()
-        var d = Logic.paieMoisDefaut(Db.today)
-        androidx.compose.runtime.mutableStateListOf(*lots.map { l ->
-            l.ym ?: run { while (d in pris) d = Logic.prevM(d); pris += d; d }
-        }.toTypedArray())
-    }
-    val nets = remember { androidx.compose.runtime.mutableStateListOf(*lots.map { numStr(it.net) }.toTypedArray()) }
-    SheetTitle("${lots.size} bulletins à ranger", "Vérifie le mois de chacun (« à vérifier » = pas reconnu), le net est facultatif.")
-    lots.forEachIndexed { i, l ->
-        if (i > 0) Divider()
-        Column(Modifier.fillMaxWidth().padding(vertical = 10.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                T("📄 " + l.nom, 12.sp, K.Tx2, modifier = Modifier.weight(1f), lines = 1)
-                if (l.ym == null) T(" à vérifier", 11.5.sp, K.Ye, FontWeight.Bold) else T(" reconnu ✓", 11.5.sp, K.Gr, FontWeight.Bold)
-            }
-            Spacer(Modifier.height(6.dp))
-            Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(Modifier.weight(1f).padding(top = 8.dp).height(56.dp).clip(RoundedCornerShape(10.dp)).background(K.Sf2), verticalAlignment = Alignment.CenterVertically) {
-                    T("‹", 22.sp, K.Tx2, modifier = Modifier.padding(horizontal = 12.dp).tap { mois[i] = Logic.prevM(mois[i]) })
-                    T(Logic.fmtM(mois[i]), 13.5.sp, K.Tx, FontWeight.SemiBold, Modifier.weight(1f), TextAlign.Center)
-                    T("›", 22.sp, K.Tx2, modifier = Modifier.padding(horizontal = 12.dp).tap { mois[i] = Logic.nextM(mois[i]) })
-                }
-                Field(nets[i], { nets[i] = it }, "Net €", Modifier.width(112.dp), number = true)
-            }
-        }
-    }
-    val doublons = mois.groupBy { it }.filter { it.value.size > 1 }.keys
-    val existants = mois.filter { m -> Db.s.paie.any { it.ym == m } }
-    if (doublons.isNotEmpty()) T("⛔ Même mois pour plusieurs bulletins : ${doublons.joinToString { Logic.fmtM(it) }}", 12.sp, K.Re, modifier = Modifier.padding(vertical = 8.dp))
-    else if (existants.isNotEmpty()) T("⚠️ Déjà rangé, sera remplacé : ${existants.joinToString { Logic.fmtM(it) }}", 12.sp, K.Ye, modifier = Modifier.padding(vertical = 8.dp))
-    Spacer(Modifier.height(6.dp))
-    Btn("✅ Ranger les ${lots.size} bulletins", bg = if (doublons.isEmpty()) K.Ac else K.Sf3) {
-        if (doublons.isNotEmpty()) { Nav.notify("Deux bulletins ont le même mois", true); return@Btn }
-        val n = Db.saveLot(lots.mapIndexed { i, l -> Triple(l.file, mois[i], num(nets[i])?.let { Logic.r2(it) }) })
-        Nav.lot = emptyList(); Nav.open(Sheet.Paies); Nav.notify("📄 $n bulletin" + (if (n > 1) "s rangés" else " rangé"))
-    }
-    BtnGhost("Annuler") { Nav.lot = emptyList(); Nav.open(Sheet.Paies) }
-}

@@ -85,8 +85,9 @@ class ScreensShot {
     @Test fun verrouEnCours() { Lock.prompting = true; shot("15_verrou_empreinte") { KbgTheme { LockScreen { } } }; Lock.prompting = false }
     @Test fun bilanAccueil() { Db.preview(sample(), LocalDate.of(2027, 1, 3)); Nav.tab = "home"; Nav.bilanVu = null; paparazzi.snapshot("13_bilan_accueil") { Frame { HomeScreen() } } }
     @Test fun bilanAnalyse() { Nav.anTab = "bilan"; Nav.anYM = "2026-12"; shot("14_bilan_analyse", "analyse") { Frame { AnalyseScreen() } }; Nav.anTab = "cat"; Nav.anYM = null }
-    @Test fun paies() { Db.preview(sample().let { Logic.setPaie(Logic.setPaie(Logic.setPaie(it, Paie("2026-11", 1912.4)), Paie("2026-10", 1887.15)), Paie("2025-12", 1840.0)) }, day)
-        paparazzi.snapshot("16_paies") { KbgTheme { Column(Modifier.fillMaxSize().background(K.Sf).padding(18.dp)) { PaiesSheet() } } } }
+    @Test fun paies() { Db.preview(sample().let { var s = it; listOf("2026-01" to 2438.45, "2026-02" to 2401.1, "2026-03" to 2455.0, "2026-05" to 2390.6, "2026-06" to 2512.3,
+        "2026-07" to 2468.0, "2026-08" to 2399.9, "2026-09" to 2421.75, "2026-10" to 2440.0, "2026-11" to null, "2025-12" to 2380.0).forEach { (y, n) -> s = Logic.setPaie(s, Paie(y, n)) }; s }, day)
+        Nav.page = "paie"; paparazzi.snapshot("16_paies") { KbgTheme { Column(Modifier.fillMaxSize().background(K.Bg)) { PaieScreen() } } }; Nav.page = null }
     @Test fun paieEdit() { Db.preview(Logic.setPaie(sample(), Paie("2026-11", 1912.4)), day)
         paparazzi.snapshot("17_paie_edit") { KbgTheme { Column(Modifier.fillMaxSize().background(K.Sf).padding(18.dp)) { PaieEditSheet("2026-11") } } } }
     @Test fun paieLot() { Db.preview(Logic.setPaie(sample(), Paie("2026-10", 1887.15)), day)
