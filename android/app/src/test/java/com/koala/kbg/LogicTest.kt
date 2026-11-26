@@ -217,4 +217,13 @@ class LogicTest {
         assertEquals("2026-10", Logic.moisDepuisTexte("Periode du 01/10/2026 au 31/10/2026"))
         assertEquals("2026-01", Logic.moisBulletin("BS janvier 2026.pdf", pdf))
     }
+
+    @Test fun netDesBulletins() {
+        val t = "MONTANT NET SOCIAL 2.378,94 NET A PAYER AVANT IMPOT SUR LE REVENU 2.516,44 dont 43,47 Imp\u00f4t sur le revenu 2.293,85 3,40 -77,99 NET A PAYER AU SALARIE (en Euros) 2.438,45 Total vers\u00e9 4.423,04"
+        eq(2438.45, Logic.netDepuisTexte(t)!!)
+        eq(1912.4, Logic.netDepuisTexte("Net pay\u00e9 en euros : 1 912,40")!!)
+        eq(1700.0, Logic.netDepuisTexte("NET A PAYER 1700.00 EUR")!!)
+        assertNull(Logic.netDepuisTexte("NET A PAYER AVANT IMPOT SUR LE REVENU 2.516,44"))
+        assertNull(Logic.netDepuisTexte("rien ici"))
+    }
 }

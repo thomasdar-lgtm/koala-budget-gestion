@@ -67,11 +67,13 @@ object Db {
         val b = app.contentResolver.openInputStream(uri)!!.use { it.readBytes() }
         if (b.size < 5 || String(b, 0, 5, Charsets.ISO_8859_1) != "%PDF-") return false
         staged().writeBytes(b)
-        stagedYm = Logic.moisBulletin(nomDe(uri), b)
+        Logic.lireBulletin(nomDe(uri), b).let { stagedYm = it.first; stagedNet = it.second }
         true
     }.getOrDefault(false)
     /** mois reconnu pour le PDF en attente (null si non reconnu) */
     var stagedYm: String? = null
+        private set
+    var stagedNet: Double? = null
         private set
 
     private fun nomDe(uri: Uri): String = runCatching {
@@ -81,7 +83,7 @@ object Db {
     }.getOrNull() ?: (uri.lastPathSegment ?: "")
 
     /** plusieurs bulletins d'un coup : chaque PDF est mis de côté avec le mois reconnu */
-    data class Lot(val file: File, val nom: String, val ym: String?)
+    data class Lot(val file: File, val nom: String, val ym: String?, val net: Double? = null)
     fun stageMany(uris: List<Uri>): Pair<List<Lot>, Int> {
         val dir = File(app.cacheDir, "paie_lot").apply { deleteRecursively(); mkdirs() }
         var refus = 0
@@ -89,7 +91,7 @@ object Db {
             runCatching {
                 val b = app.contentResolver.openInputStream(u)!!.use { it.readBytes() }
                 if (b.size < 5 || String(b, 0, 5, Charsets.ISO_8859_1) != "%PDF-") null
-                else { val f = File(dir, "$i.pdf").apply { writeBytes(b) }; val n = nomDe(u); Lot(f, n, Logic.moisBulletin(n, b)) }
+                else { val f = File(dir, "$i.pdf").apply { writeBytes(b) }; val n = nomDe(u); val (ym, net) = Logic.lireBulletin(n, b); Lot(f, n, ym, net) }
             }.getOrNull().also { if (it == null) refus++ }
         }
         return lots to refus
@@ -117,6 +119,17 @@ object Db {
         if (!paieFile(ym).exists()) return false
         edit { Logic.setPaie(it, Paie(ym, net), old) }
         return true
+    }
+
+    /** bulletins déjà rangés sans net : lit le net dans leur PDF ; renvoie le nombre complété */
+    fun remplirNets(): Int {
+        var st = s; var n = 0
+        s.paie.filter { it.net == null && paieOk(it.ym) }.forEach { p ->
+            val v = runCatching { Logic.netDepuisTexte(Logic.pdfText(paieFile(p.ym).readBytes())) }.getOrNull()
+            if (v != null) { st = Logic.setPaie(st, p.copy(net = v)); n++ }
+        }
+        if (n > 0) edit { st }
+        return n
     }
 
     fun delPaie(ym: String) { paieFile(ym).delete(); edit { Logic.delPaie(it, ym) } }

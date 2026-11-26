@@ -381,6 +381,28 @@ object Logic {
     /** mois d'un bulletin : nom du fichier, sinon contenu */
     fun moisBulletin(nom: String, b: ByteArray?): String? = moisDepuisNom(nom) ?: b?.let { runCatching { moisDepuisTexte(pdfText(it)) }.getOrNull() }
 
+    private const val MONTANT = "(\\d{1,3}(?:[. \u00a0\u202f]\\d{3})+,\\d{2}|\\d+,\\d{2}|\\d+\\.\\d{2})"
+    private fun montant(s: String): Double? {
+        val t = s.replace(" ", "").replace("\u00a0", "").replace("\u202f", "")
+        val v = if (t.contains(',')) t.replace(".", "").replace(',', '.') else t
+        return v.toDoubleOrNull()?.takeIf { it in 50.0..50000.0 }
+    }
+
+    /** net payé d'un bulletin : « net à payer au salarié », « net payé »… (jamais le net avant impôt) */
+    fun netDepuisTexte(txt: String): Double? {
+        val n = plain(txt)
+        listOf("net a payer au salarie", "net paye", "net verse", "net a payer(?! avant)").forEach { lbl ->
+            Regex("$lbl[^0-9-]{0,40}$MONTANT").find(n)?.let { m -> montant(m.groupValues[1])?.let { return r2(it) } }
+        }
+        return null
+    }
+
+    /** mois et net d'un bulletin (le texte du PDF n'est lu qu'une fois) */
+    fun lireBulletin(nom: String, b: ByteArray): Pair<String?, Double?> {
+        val txt = runCatching { pdfText(b) }.getOrDefault("")
+        return (moisDepuisNom(nom) ?: runCatching { moisDepuisTexte(txt) }.getOrNull()) to runCatching { netDepuisTexte(txt) }.getOrNull()
+    }
+
     /** mois proposé pour un nouveau bulletin : le mois en cours à partir du 20, sinon le précédent */
     fun paieMoisDefaut(today: LocalDate): String = if (today.dayOfMonth >= 20) ym(today) else prevM(ym(today))
 

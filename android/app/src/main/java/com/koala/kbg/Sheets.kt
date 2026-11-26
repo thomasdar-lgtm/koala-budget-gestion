@@ -471,7 +471,12 @@ internal fun PaiesSheet() {
     val s = Db.s
     SheetTitle("Bulletins de paie", "Rangés dans KBG (protégés par l'empreinte). « Partager » en envoie une copie vers Drive, Gmail…")
     Btn("＋ Ajouter des bulletins (PDF)") { Db.dropStaged(); Nav.close(); Nav.paieMultiReq++ }
-    T("Tu peux en sélectionner plusieurs d'un coup ; le mois est reconnu tout seul quand c'est possible.", 11.sp, K.Tx3, modifier = Modifier.padding(top = 6.dp))
+    T("Tu peux en sélectionner plusieurs d'un coup ; le mois et le net sont reconnus tout seuls quand c'est possible.", 11.sp, K.Tx3, modifier = Modifier.padding(top = 6.dp))
+    val sansNet = s.paie.count { it.net == null && Db.paieOk(it.ym) }
+    if (sansNet > 0) BtnGhost("🔎 Lire le net des bulletins sans montant ($sansNet)") {
+        val n = Db.remplirNets()
+        if (n > 0) Nav.notify("Net trouvé pour $n bulletin" + (if (n > 1) "s" else "")) else Nav.notify("Aucun net trouvé dans ces PDF", true)
+    }
     Spacer(Modifier.height(14.dp))
     if (s.paie.isEmpty()) T("Aucun bulletin pour l'instant", 12.5.sp, K.Tx3, modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp), align = TextAlign.Center)
     Logic.paieParAn(s).forEach { (y, l, tot) ->
@@ -502,7 +507,7 @@ internal fun PaiesSheet() {
 internal fun PaieEditSheet(ym0: String?) {
     val p0 = ym0?.let { y -> Db.s.paie.find { it.ym == y } }
     var ym by remember { mutableStateOf(p0?.ym ?: Db.stagedYm ?: Logic.paieMoisDefaut(Db.today)) }
-    var net by remember { mutableStateOf(numStr(p0?.net)) }
+    var net by remember { mutableStateOf(numStr(p0?.net ?: if (Db.hasStaged()) Db.stagedNet else null)) }
     val nouveau = remember { Db.hasStaged() }
     SheetTitle(if (p0 != null) "Bulletin de ${Logic.fmtM(p0.ym)}" else "Nouveau bulletin",
         if (nouveau) "📄 PDF prêt à être rangé" else "")
@@ -543,7 +548,7 @@ internal fun PaieLotSheet() {
             l.ym ?: run { while (d in pris) d = Logic.prevM(d); pris += d; d }
         }.toTypedArray())
     }
-    val nets = remember { androidx.compose.runtime.mutableStateListOf(*Array(lots.size) { "" }) }
+    val nets = remember { androidx.compose.runtime.mutableStateListOf(*lots.map { numStr(it.net) }.toTypedArray()) }
     SheetTitle("${lots.size} bulletins à ranger", "Vérifie le mois de chacun (« à vérifier » = pas reconnu), le net est facultatif.")
     lots.forEachIndexed { i, l ->
         if (i > 0) Divider()
