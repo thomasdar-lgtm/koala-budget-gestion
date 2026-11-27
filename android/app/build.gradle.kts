@@ -13,8 +13,8 @@ android {
         applicationId = "com.koala.kbg"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2020
-        versionName = "2.20"
+        versionCode = 2021
+        versionName = "2.21"
     }
 
     signingConfigs {

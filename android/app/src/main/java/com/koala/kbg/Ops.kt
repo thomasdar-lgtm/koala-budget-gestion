@@ -235,7 +235,7 @@ private fun Montant(v: String, col: Color, focus: FocusRequester? = null, onChan
         value = v, onValueChange = { n -> onChange(n.filter { it.isDigit() || it == ',' || it == '.' }) }, singleLine = true,
         textStyle = TextStyle(fontSize = 44.sp, fontWeight = FontWeight.ExtraBold, color = col, textAlign = TextAlign.Center),
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), cursorBrush = SolidColor(col),
-        visualTransformation = Euro,
+        visualTransformation = if (v.isEmpty()) VisualTransformation.None else Euro,
         modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp).then(if (focus != null) Modifier.focusRequester(focus) else Modifier),
         decorationBox = { inner ->
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
