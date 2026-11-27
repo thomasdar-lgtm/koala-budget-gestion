@@ -170,24 +170,53 @@ fun CatIcon(cat: String, size: TextUnit = 16.sp) {
     else Text(Cats.ico(cat), fontSize = size)
 }
 
-@Composable
-fun IconBox(cat: String, sens: String, box: Dp = 36.dp) {
-    Box(Modifier.size(box).clip(RoundedCornerShape(10.dp)).background(if (sens == CREDIT) K.Gr.copy(alpha = 0.12f) else K.Re.copy(alpha = 0.12f)),
-        contentAlignment = Alignment.Center) { CatIcon(cat) }
+/** couleur propre à chaque catégorie */
+fun catCol(c: String): Color = when (c) {
+    "Logement & Charges" -> Color(0xFF7C83FD); "Alimentation" -> Color(0xFF4ECCA3); "Restaurants & Sorties" -> Color(0xFFFF9F43)
+    "Transport & Carburant" -> Color(0xFF48DBFB); "Factures & Abonnements" -> Color(0xFFA29BFE); "Santé" -> Color(0xFFFF6B81)
+    "Loisirs & Culture" -> Color(0xFFFECA57); "Streaming & Numérique" -> Color(0xFFE056FD); "Vêtements & Beauté" -> Color(0xFFFF7EB3)
+    "Pokémon TCG" -> Color(0xFF2E86FF); "Épargne & Remboursements" -> Color(0xFF1DD1A1); "Famille & Enfants" -> Color(0xFFF8A5C2)
+    "Crédits & Prêts" -> Color(0xFFFF8C61); "Revenus Salaire" -> Color(0xFF2ED573); "Revenus Autres" -> Color(0xFF7BED9F)
+    "Remboursements reçus" -> Color(0xFF70A1FF); else -> Color(0xFF8E92B0)
 }
 
-/** ligne d'opération */
 @Composable
-fun TxRow(s: St, t: Tx, pointage: Boolean = true, onClick: () -> Unit) {
+fun IconBox(cat: String, sens: String, box: Dp = 40.dp) {
+    val c = catCol(cat)
+    Box(Modifier.size(box).clip(RoundedCornerShape(12.dp)).background(c.copy(alpha = 0.16f)).border(1.dp, c.copy(alpha = 0.25f), RoundedCornerShape(12.dp)),
+        contentAlignment = Alignment.Center) { CatIcon(cat, 17.sp) }
+}
+
+/** calendrier Android */
+fun pickDate(ctx: android.content.Context, value: String, onChange: (String) -> Unit) {
+    val d = runCatching { LocalDate.parse(value) }.getOrDefault(LocalDate.now())
+    DatePickerDialog(ctx, { _, y, m, dd -> onChange(LocalDate.of(y, m + 1, dd).toString()) }, d.year, d.monthValue - 1, d.dayOfMonth).show()
+}
+
+/** petite étiquette (🔁, 💳…) */
+@Composable
+fun Badge(s: String, col: Color = K.Tx2) {
+    Box(Modifier.padding(start = 5.dp).clip(RoundedCornerShape(5.dp)).background(col.copy(alpha = 0.14f)).padding(horizontal = 5.dp, vertical = 1.dp)) {
+        T(s, 9.5.sp, col, FontWeight.Bold)
+    }
+}
+
+/** ligne d'opération : tuile de catégorie, libellé, catégorie · date, montant, pointage */
+@Composable
+fun TxRow(s: St, t: Tx, pointage: Boolean = true, date: Boolean = true, onClick: () -> Unit) {
     val c = Logic.cat(s, t)
-    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
         IconBox(c, t.sens)
         Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
-            T(t.libelle, 14.sp, K.Tx, FontWeight.SemiBold, lines = 1)
-            T("$c · ${Logic.fmtD(t.date).let { it.take(6) + it.takeLast(2) }}", 11.5.sp, K.Tx2, lines = 1)
+            T(t.libelle, 14.5.sp, K.Tx, FontWeight.SemiBold, lines = 1)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                T(Cats.court(c) + (if (date) " · " + Logic.fmtD(t.date).take(5) else ""), 11.5.sp, K.Tx2, lines = 1, modifier = Modifier.weight(1f, fill = false))
+                if (t.type == "rec") Badge("🔁")
+                if (Logic.isCard(t)) Badge("💳")
+            }
         }
-        T((if (t.sens == CREDIT) "+" else "-") + Logic.fmt(t.montant), 14.sp, if (t.sens == CREDIT) K.Gr else K.Re, FontWeight.Bold)
-        if (pointage) { Spacer(Modifier.width(10.dp)); Pointe(t) }
+        T((if (t.sens == CREDIT) "+" else "-") + Logic.fmt(t.montant), 15.sp, if (t.sens == CREDIT) K.Gr else K.Tx, FontWeight.ExtraBold)
+        if (pointage) { Spacer(Modifier.width(6.dp)); Pointe(t) }
     }
 }
 

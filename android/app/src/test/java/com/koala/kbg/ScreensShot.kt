@@ -78,7 +78,7 @@ class ScreensShot {
     @Test fun pokemon() = shot("3_pokemon", "pokemon") { Frame { PokeScreen() } }
     @Test fun credits() = shot("4_credits", "credits") { Frame { CreditsScreen() } }
     @Test fun analyse() = shot("5_analyse", "analyse") { Frame { AnalyseScreen() } }
-    @Test fun ajout() = shot("6_ajout") { SheetFrame { AddTxSheet() } }
+    @Test fun ajout() = shot("6_ajout") { SheetFrame { TxFormSheet(null) } }
     @Test fun menu() = shot("7_menu") { SheetFrame { MenuSheet() } }
     @Test fun creditDetail() = shot("8_credit") { SheetFrame { CreditDetailSheet("c2") } }
     @Test fun creditEdit() = shot("9_credit_saisie") { SheetFrame { CreditEditSheet("c1") } }
@@ -101,5 +101,7 @@ class ScreensShot {
     @Test fun revDetail() = shot("20_rev_detail") { SheetFrame { CreditDetailSheet("c3") } }
     @Test fun revPioche() = shot("21_rev_pioche") { SheetFrame { TirageSheet("c3") } }
     @Test fun revNouveau() = shot("22_credit_nouveau") { SheetFrame { CreditEditSheet(null) } }
+    @Test fun editTx() = shot("23_edit_tx") { SheetFrame { TxFormSheet(4) } }
+    @Test fun recMois() = shot("24_rec_mois") { SheetFrame { RecMonthSheet("r3", "2026-12") } }
     @Test fun solde() = shot("10_solde") { SheetFrame { SoldeSheet() } }
 }

@@ -246,5 +246,14 @@ object Cats {
         "Divers" to "📦", "Revenus Salaire" to "💼", "Revenus Autres" to "↙️", "Remboursements reçus" to "↩️",
     )
     fun ico(c: String): String = ICO[c] ?: "•"
+    private val COURT = mapOf(
+        "Logement & Charges" to "Logement", "Alimentation" to "Courses", "Restaurants & Sorties" to "Restos",
+        "Transport & Carburant" to "Transport", "Factures & Abonnements" to "Factures", "Loisirs & Culture" to "Loisirs",
+        "Streaming & Numérique" to "Streaming", "Vêtements & Beauté" to "Vêtements", "Pokémon TCG" to "Pokémon",
+        "Épargne & Remboursements" to "Épargne", "Famille & Enfants" to "Famille", "Crédits & Prêts" to "Crédits",
+        "Revenus Salaire" to "Salaire", "Revenus Autres" to "Autres", "Remboursements reçus" to "Rembourst",
+    )
+    /** nom court pour les tuiles */
+    fun court(c: String): String = COURT[c] ?: c
     fun of(sens: String) = if (sens == CREDIT) REV else DEP
 }
