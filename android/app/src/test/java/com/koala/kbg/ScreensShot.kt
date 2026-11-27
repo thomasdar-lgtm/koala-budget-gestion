@@ -47,6 +47,8 @@ class ScreensShot {
         )
         s = Logic.saveCredit(s, Cred("c1", "Crédit Dispo", 10000.0, 6.0, 60, 0.0, "2026-12", 5), 1)
         s = Logic.saveCredit(s, Cred("c2", "Auto", 15000.0, 4.5, 48, 0.0, "2024-03", 10), 2)
+        s = Logic.saveCredit(s, Cred("c3", "Crédit Dispo", 2000.0, 6.0, 0, 193.0, "2026-11", 5, type = "renouv", plafond = 10000.0), 3)
+        s = Logic.addTirage(s, "c3", "2026-11-20", 1500.0, 220.0, 4)
         s = Logic.autoCheckRec(s, day)
         s = Logic.togglePointe(s, 1); s = Logic.togglePointe(s, 3)
         s.tx.find { it.libelle == "Loyer" }?.let { s = Logic.togglePointe(s, it.id) }
@@ -96,5 +98,8 @@ class ScreensShot {
             Db.Lot(java.io.File(d, "2.pdf"), "scan_0042.pdf", null))
         paparazzi.snapshot("18_paie_lot") { KbgTheme { Column(Modifier.fillMaxSize().background(K.Sf).padding(18.dp)) { PaieLotSheet() } } }; Nav.lot = emptyList() }
     @Test fun pokeVide() { Nav.pokeYM = "2026-08"; Db.preview(sample(), day); Nav.tab = "pokemon"; paparazzi.snapshot("19_poke_vide") { Frame { PokeScreen() } } }
+    @Test fun revDetail() = shot("20_rev_detail") { SheetFrame { CreditDetailSheet("c3") } }
+    @Test fun revPioche() = shot("21_rev_pioche") { SheetFrame { TirageSheet("c3") } }
+    @Test fun revNouveau() = shot("22_credit_nouveau") { SheetFrame { CreditEditSheet(null) } }
     @Test fun solde() = shot("10_solde") { SheetFrame { SoldeSheet() } }
 }

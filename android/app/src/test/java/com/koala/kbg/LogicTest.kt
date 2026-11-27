@@ -226,4 +226,28 @@ class LogicTest {
         assertNull(Logic.netDepuisTexte("NET A PAYER AVANT IMPOT SUR LE REVENU 2.516,44"))
         assertNull(Logic.netDepuisTexte("rien ici"))
     }
+
+    @Test fun renouvelable() {
+        val c = Cred("c9", "Dispo", 3000.0, 6.0, 0, 193.0, "2026-12", 5, type = "renouv", plafond = 10000.0)
+        var s = Logic.saveCredit(St(), c, 1)
+        val p = Logic.crPlan(s.cred[0])
+        eq(15.0, p.rows[0].it); eq(178.0, p.rows[0].cap); eq(2822.0, p.rows[0].bal); eq(0.0, p.rows.last().bal)
+        eq(3000.0, Logic.crEtat(s.cred[0], LocalDate.of(2026, 11, 27)).cap)
+        assertEquals(p.rows.last().ym, s.rec[0].fin)
+        // tirage de 2 000 € le 10 janvier, mensualité passée à 250 €
+        s = Logic.addTirage(s, "c9", "2027-01-10", 2000.0, 250.0, 2)
+        val t = s.tx.single(); assertEquals(CREDIT, t.sens); eq(2000.0, t.montant); assertFalse(Logic.isRevenu(s, t))
+        assertEquals(listOf("2027-02" to 250.0), s.cred[0].mensuHist)
+        val r = Logic.crPlan(s.cred[0]).rows
+        eq(193.0, r[1].pay); eq(2643.11, r[1].bal); eq(23.22, r[2].it); eq(250.0, r[2].pay)
+        eq(4643.11, Logic.crEtat(s.cred[0], LocalDate.of(2027, 1, 15)).cap)
+        eq(250.0, s.rec[0].montant); assertEquals(Logic.crPlan(s.cred[0]).rows.last().ym, s.rec[0].fin)
+        assertEquals(s.cred, Json.parse(Json.write(s)).cred)
+        // annuler le tirage
+        s = Logic.delTirage(s, "c9", s.cred[0].tirages[0], 3)
+        assertTrue(s.tx.isEmpty()); assertTrue(s.cred[0].tirages.isEmpty())
+        // renouvelable neuf, rien d'utilisé : pas de mensualité
+        val v = Logic.saveCredit(St(), Cred("c8", "Neuf", 0.0, 6.0, 0, 100.0, "2026-12", 5, type = "renouv", plafond = 5000.0), 1)
+        assertEquals(1, v.cred.size); assertTrue(Logic.recsOf(v, "2026-12").isEmpty()); eq(0.0, Logic.crTotaux(v, LocalDate.of(2026, 11, 27)).cap)
+    }
 }

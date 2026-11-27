@@ -63,6 +63,7 @@ fun SheetHost() {
                     is Sheet.RecMonth -> RecMonthSheet(sh.rid, sh.ym)
                     is Sheet.CreditDetail -> CreditDetailSheet(sh.id)
                     is Sheet.CreditEdit -> CreditEditSheet(sh.id)
+                    is Sheet.Pioche -> TirageSheet(sh.credId)
                     is Sheet.PaieEdit -> PaieEditSheet(sh.ym)
                     Sheet.PaieLot -> PaieLotSheet()
                 }
@@ -372,6 +373,7 @@ internal fun RecMonthSheet(rid: String, ym: String) {
 internal fun CreditDetailSheet(id: String) {
     val c = Db.s.cred.find { it.id == id } ?: run { Nav.close(); return }
     val e = Logic.crEtat(c, Db.today)
+    if (c.renouv) { RevDetail(c, e); return }
     SheetTitle(c.nom)
     Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         Column(Modifier.weight(1f)) {
@@ -419,6 +421,9 @@ internal fun CreditDetailSheet(id: String) {
 @Composable
 internal fun CreditEditSheet(id: String?) {
     val c = id?.let { i -> Db.s.cred.find { it.id == i } }
+    var type by remember { mutableStateOf(c?.type ?: "amort") }
+    if (c == null) { SheetTitle("Nouveau crédit"); Seg(listOf("amort" to "Prêt classique", "renouv" to "Renouvelable"), type) { type = it }; Spacer(Modifier.height(6.dp)) }
+    if (type == "renouv") { RevEdit(c); return }
     var nom by remember { mutableStateOf(c?.nom ?: "") }
     var mt by remember { mutableStateOf(numStr(c?.montant)) }
     var taux by remember { mutableStateOf(numStr(c?.taux)) }
@@ -433,7 +438,7 @@ internal fun CreditEditSheet(id: String?) {
         return Cred(c?.id ?: "c${System.currentTimeMillis()}", nom.trim().ifEmpty { "Crédit" }, Logic.r2(m), num(taux) ?: 0.0,
             d, if (d > 0) 0.0 else Logic.r2(ms), d1.take(7), d1.substring(8, 10).toInt(), c?.recId) to null
     }
-    SheetTitle(if (c != null) "Modifier le crédit" else "Nouveau crédit")
+    if (c != null) SheetTitle("Modifier le crédit")
     Field(nom, { nom = it }, "Nom", placeholder = "ex : Crédit Dispo CA")
     Field(mt, { mt = it }, "Montant emprunté (€)", number = true, placeholder = "ex : 10000")
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -463,3 +468,127 @@ internal fun CreditEditSheet(id: String?) {
     }
 }
 
+
+// ═══ CRÉDIT RENOUVELABLE ═══════════════════════════════════
+@Composable
+private fun RevDetail(c: Cred, e: Logic.Etat) {
+    val dispo = maxOf(0.0, c.plafond - e.cap)
+    SheetTitle(c.nom)
+    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(Modifier.weight(1f)) {
+            KV("Plafond", Logic.fmt(c.plafond)); KV("Utilisé", Logic.fmt(e.cap)); KV("Disponible", Logic.fmt(dispo))
+        }
+        Column(Modifier.weight(1f)) {
+            KV("Mensualité", Logic.fmt(e.m)); KV("Taux", c.taux.toString().removeSuffix(".0").replace('.', ',') + " %")
+            KV("Intérêts payés", Logic.fmt(e.itPaid))
+        }
+    }
+    if (e.nRest > 0) T("Sans nouveau tirage : remboursé en ${Logic.fmtM(e.fin)}, encore ${Logic.fmt(e.itRest)} d'intérêts.", 12.sp, K.Tx2, modifier = Modifier.padding(vertical = 10.dp))
+    else Spacer(Modifier.height(10.dp))
+    Btn("💶 Piocher", bg = if (dispo > 0.004) K.Ac else K.Sf3) { if (dispo > 0.004) Nav.open(Sheet.Pioche(c.id)) else Nav.notify("Plafond atteint", true) }
+    if (c.tirages.isNotEmpty()) {
+        Sec("Tirages", Modifier.padding(top = 14.dp))
+        c.tirages.sortedByDescending { it.date }.forEach { t ->
+            Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                T(Logic.fmtD(t.date), 13.sp, K.Tx2, modifier = Modifier.weight(1f))
+                T("+" + Logic.fmt(t.montant), 13.sp, K.Tx, FontWeight.Bold)
+                T("  ✕", 14.sp, K.Tx3, modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable {
+                    Nav.confirm("Annuler ce tirage ?", "${Logic.fmt(t.montant)} du ${Logic.fmtD(t.date)} : l'entrée correspondante est aussi retirée des opérations.", "Annuler le tirage") {
+                        Db.edit { Logic.delTirage(it, c.id, t, System.currentTimeMillis()) }; Db.tick()
+                    }
+                }.padding(4.dp))
+            }
+        }
+    }
+    Row(Modifier.fillMaxWidth().padding(top = 14.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+        T("Modifier", 13.sp, K.Tx2, FontWeight.SemiBold, Modifier.clip(RoundedCornerShape(8.dp)).clickable { Nav.open(Sheet.CreditEdit(c.id)) }.padding(8.dp))
+        T("Supprimer", 13.sp, K.Re, FontWeight.SemiBold, Modifier.clip(RoundedCornerShape(8.dp)).clickable {
+            Nav.confirm("Supprimer « ${c.nom} » ?", "Sa mensualité est retirée des récurrentes ; les opérations déjà passées restent.", "Supprimer") {
+                Db.edit { Logic.delCredit(it, c.id) }; Nav.close()
+            }
+        }.padding(8.dp))
+    }
+}
+
+@Composable
+private fun RevEdit(c: Cred?) {
+    var nom by remember { mutableStateOf(c?.nom ?: "") }
+    var plaf by remember { mutableStateOf(numStr(c?.plafond)) }
+    var du by remember { mutableStateOf(numStr(c?.montant)) }
+    var taux by remember { mutableStateOf(numStr(c?.taux)) }
+    var mens by remember { mutableStateOf(numStr(c?.let { Logic.mensuActuelle(it) })) }
+    var d1 by remember { mutableStateOf(c?.let { Logic.dayOf(it.debut, it.jour) } ?: "") }
+    fun form(): Cred? {
+        val p = num(plaf) ?: return null; val m = num(mens) ?: return null
+        if (p <= 0 || m <= 0 || d1.length != 10) return null
+        val base = Cred(c?.id ?: "c${System.currentTimeMillis()}", nom.trim().ifEmpty { "Crédit renouvelable" }, Logic.r2(num(du) ?: 0.0), num(taux) ?: 0.0,
+            0, Logic.r2(m), d1.take(7), d1.substring(8, 10).toInt(), c?.recId, "renouv", Logic.r2(p), c?.tirages ?: emptyList(), c?.mensuHist ?: emptyList())
+        // modification : la nouvelle mensualité s'applique à partir de la prochaine échéance
+        return if (c != null) Logic.setMensu(base.copy(mensu = c.mensu), m, Logic.ds(Db.today)) else base
+    }
+    if (c != null) SheetTitle("Modifier le crédit")
+    Field(nom, { nom = it }, "Nom", placeholder = "ex : Crédit Dispo CA")
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Field(plaf, { plaf = it }, "Plafond (€)", Modifier.weight(1f), number = true)
+        Field(du, { du = it }, if (c == null) "Déjà utilisé (€)" else "Utilisé au départ", Modifier.weight(1f), number = true, placeholder = "0")
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Field(taux, { taux = it }, "Taux annuel (%)", Modifier.weight(1f), number = true)
+        Field(mens, { mens = it }, "Mensualité (€)", Modifier.weight(1f), number = true)
+    }
+    DateField(if (c == null) "Prochaine échéance" else "1re échéance suivie", d1) { d1 = it }
+    form()?.let { f ->
+        val p = Logic.crPlan(f)
+        Box(Modifier.fillMaxWidth().padding(bottom = 12.dp), contentAlignment = Alignment.Center) {
+            when {
+                p.err != null -> T(p.err, 12.5.sp, K.Re, align = TextAlign.Center)
+                p.rows.isNotEmpty() -> T("Remboursé en ${Logic.fmtM(p.rows.last().ym)} sans nouveau tirage · intérêts ${Logic.fmt(p.rows.sumOf { it.it })}", 12.5.sp, K.Tx2, align = TextAlign.Center)
+            }
+        }
+    }
+    Btn(if (c != null) "Enregistrer" else "Ajouter") {
+        val f = form() ?: run { Nav.notify("Plafond, mensualité et échéance requis", true); return@Btn }
+        Logic.crPlan(f).err?.let { Nav.notify(it, true); return@Btn }
+        Db.edit { Logic.saveCredit(it, f, System.currentTimeMillis()) }; Db.tick()
+        Nav.open(Sheet.CreditDetail(f.id))
+    }
+}
+
+/** piocher dans un renouvelable */
+@Composable
+internal fun TirageSheet(credId: String) {
+    val c = Db.s.cred.find { it.id == credId } ?: run { Nav.close(); return }
+    val e = Logic.crEtat(c, Db.today)
+    val dispo = maxOf(0.0, c.plafond - e.cap)
+    var mt by remember { mutableStateOf("") }
+    var date by remember { mutableStateOf(Logic.ds(Db.today)) }
+    var mens by remember { mutableStateOf(numStr(Logic.mensuActuelle(c))) }
+    SheetTitle("Piocher dans ${c.nom}", "Disponible : ${Logic.fmt(dispo)}")
+    Field(mt, { mt = it }, "Montant (€)", number = true, big = true, placeholder = "0,00")
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
+        DateField("Date", date, Modifier.weight(1f)) { date = it }
+        Column(Modifier.weight(1f)) {
+            T("Nouvelle mensualité", 11.sp, K.Tx3, modifier = Modifier.padding(bottom = 4.dp))
+            Field(mens, { mens = it }, "€", number = true)
+        }
+    }
+    val v = num(mt)
+    if (v != null && v > 0) {
+        val m = num(mens) ?: Logic.mensuActuelle(c)
+        val sim = Logic.addTirage(Db.s, c.id, date, v, m, 0).cred.find { it.id == c.id }?.let { Logic.crPlan(it) }
+        if (v > dispo + 0.004) T("⛔ Plus que le disponible", 12.5.sp, K.Re, modifier = Modifier.padding(bottom = 10.dp))
+        else if (sim?.err != null) T("⛔ ${sim.err}", 12.5.sp, K.Re, modifier = Modifier.padding(bottom = 10.dp))
+        else if (sim != null && sim.rows.isNotEmpty()) T("Remboursé en ${Logic.fmtM(sim.rows.last().ym)} · intérêts ${Logic.fmt(sim.rows.sumOf { it.it })}", 12.5.sp, K.Tx2,
+            modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp), align = TextAlign.Center)
+    }
+    Btn("Piocher") {
+        val x = num(mt)
+        if (x == null || x <= 0) { Nav.notify("Montant requis", true); return@Btn }
+        if (x > dispo + 0.004) { Nav.notify("Plus que le disponible", true); return@Btn }
+        val m = num(mens) ?: Logic.mensuActuelle(c)
+        val st = Logic.addTirage(Db.s, c.id, date, x, m, System.currentTimeMillis())
+        st.cred.find { it.id == c.id }?.let { Logic.crPlan(it).err }?.let { Nav.notify(it, true); return@Btn }
+        Db.edit { st }; Db.tick()
+        Nav.open(Sheet.CreditDetail(c.id)); Nav.notify("💶 ${Logic.fmt(x)} ajoutés à ton compte")
+    }
+}

@@ -51,7 +51,16 @@ data class Cred(
     val debut: String,                    // mois de la 1re échéance
     val jour: Int,
     val recId: String? = null,
-)
+    val type: String = "amort",           // "amort" (prêt classique) ou "renouv" (renouvelable)
+    val plafond: Double = 0.0,            // renouvelable : montant maximum
+    val tirages: List<Tirage> = emptyList(),
+    val mensuHist: List<Pair<String, Double>> = emptyList(),   // renouvelable : nouvelle mensualité à partir d'un mois
+) {
+    val renouv: Boolean get() = type == "renouv"
+}
+
+/** argent pioché dans un crédit renouvelable (txId = l'entrée créée dans les opérations) */
+data class Tirage(val date: String, val montant: Double, val txId: Long? = null)
 
 data class Solde(val montant: Double, val date: String)
 
@@ -134,6 +143,11 @@ object Json {
                     montant = c.num("montant") ?: 0.0, taux = c.num("taux") ?: 0.0,
                     duree = (c.num("duree") ?: 0.0).toInt(), mensu = c.num("mensu") ?: 0.0,
                     debut = c.str("debut") ?: "", jour = (c.num("jour") ?: 5.0).toInt(), recId = c.str("recId"),
+                    type = c.str("type") ?: "amort", plafond = c.num("plafond") ?: 0.0,
+                    tirages = c.optJSONArray("tirages")?.let { a -> (0 until a.length()).mapNotNull { k -> a.optJSONObject(k)?.let { t ->
+                        val d = t.str("date"); val m = t.num("montant"); if (d != null && m != null) Tirage(d, m, t.num("txId")?.toLong()) else null } } } ?: emptyList(),
+                    mensuHist = c.optJSONArray("mensuHist")?.let { a -> (0 until a.length()).mapNotNull { k -> a.optJSONObject(k)?.let { t ->
+                        val y = t.str("ym"); val m = t.num("m"); if (y != null && m != null) y to m else null } } } ?: emptyList(),
                 )
             }
         }
@@ -190,6 +204,11 @@ object Json {
                     put("id", c.id); put("nom", c.nom); put("montant", c.montant); put("taux", c.taux)
                     put("duree", c.duree); put("mensu", c.mensu); put("debut", c.debut); put("jour", c.jour)
                     c.recId?.let { put("recId", it) }
+                    if (c.renouv) {
+                        put("type", c.type); put("plafond", c.plafond)
+                        put("tirages", JSONArray().apply { c.tirages.forEach { t -> put(JSONObject().put("date", t.date).put("montant", t.montant).apply { t.txId?.let { put("txId", it) } }) } })
+                        put("mensuHist", JSONArray().apply { c.mensuHist.forEach { (y, m) -> put(JSONObject().put("ym", y).put("m", m)) } })
+                    }
                 })
             }
         })

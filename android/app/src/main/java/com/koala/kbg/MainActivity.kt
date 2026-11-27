@@ -103,6 +103,7 @@ sealed class Sheet {
     data class RecMonth(val rid: String, val ym: String) : Sheet()
     data class CreditDetail(val id: String) : Sheet()
     data class CreditEdit(val id: String?) : Sheet()
+    data class Pioche(val credId: String) : Sheet()
     data object PaieLot : Sheet()
     data class PaieEdit(val ym: String?) : Sheet()   // null = nouveau bulletin (PDF déjà choisi)
 }

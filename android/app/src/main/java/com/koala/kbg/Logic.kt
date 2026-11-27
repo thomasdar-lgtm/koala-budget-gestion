@@ -194,9 +194,14 @@ object Logic {
     data class Row(val ym: String, val date: String, val it: Double, val cap: Double, val pay: Double, val bal: Double)
     data class Plan(val m: Double, val rows: List<Row>, val err: String? = null)
 
-    /** échéancier : mensualité constante (calculée, ou celle indiquée par la banque) */
+    /** mensualité d'un renouvelable pour un mois (la dernière fixée avant ce mois) */
+    fun mensuAt(c: Cred, ym: String): Double = c.mensuHist.filter { it.first <= ym }.maxByOrNull { it.first }?.second ?: c.mensu
+    fun mensuActuelle(c: Cred): Double = c.mensuHist.maxByOrNull { it.first }?.second ?: c.mensu
+
+    /** échéancier : mensualité constante (calculée, ou celle indiquée par la banque) ; renouvelable : tirages compris */
     fun crPlan(c: Cred): Plan {
         val t = c.taux / 1200.0
+        if (c.renouv) return revPlan(c, t)
         if (c.debut.length < 7 || (c.mensu <= 0 && c.duree <= 0)) return Plan(0.0, emptyList(), "Durée ou mensualité requise")
         val m = r2(if (c.mensu > 0) c.mensu else if (t != 0.0) c.montant * t / (1 - (1 + t).pow(-c.duree)) else c.montant / c.duree)
         val rows = ArrayList<Row>()
@@ -213,6 +218,30 @@ object Logic {
         return Plan(m, rows)
     }
 
+    /** renouvelable : chaque mois, intérêts sur le reste dû puis mensualité ; les tirages s'ajoutent à leur date */
+    private fun revPlan(c: Cred, t: Double): Plan {
+        if (c.debut.length < 7) return Plan(0.0, emptyList(), "Date de prochaine échéance requise")
+        val tir = c.tirages.sortedBy { it.date }
+        val rows = ArrayList<Row>()
+        var bal = c.montant; var ym = c.debut; var k = 0; var ti = 0
+        while (k < 600) {
+            val date = dayOf(ym, c.jour)
+            while (ti < tir.size && tir[ti].date <= date) { bal = r2(bal + tir[ti].montant); ti++ }
+            if (bal <= 0.004 && ti >= tir.size) break
+            if (bal > 0.004) {
+                val m = mensuAt(c, ym)
+                val it = r2(bal * t)
+                var cap = r2(m - it)
+                if (cap <= 0) return Plan(m, emptyList(), "La mensualité ne couvre pas les intérêts")
+                if (cap > bal) cap = bal
+                bal = r2(bal - cap)
+                rows += Row(ym, date, it, cap, r2(it + cap), bal)
+            }
+            ym = nextM(ym); k++
+        }
+        return Plan(r2(mensuActuelle(c)), rows)
+    }
+
     data class Etat(
         val m: Double, val err: String?, val rows: List<Row>, val nPaid: Int, val nRest: Int, val cap: Double,
         val itPaid: Double, val itRest: Double, val itTot: Double, val totPay: Double, val fin: String, val prochaine: Row?,
@@ -221,9 +250,10 @@ object Logic {
     fun crEtat(c: Cred, today: LocalDate): Etat {
         val p = crPlan(c); val td = ds(today)
         val paid = p.rows.filter { it.date <= td }; val rest = p.rows.drop(paid.size)
+        val cap = if (c.renouv) r2(maxOf(0.0, c.montant + c.tirages.filter { it.date <= td }.sumOf { it.montant } - paid.sumOf { it.cap }))
+            else paid.lastOrNull()?.bal ?: c.montant
         return Etat(
-            m = p.m, err = p.err, rows = p.rows, nPaid = paid.size, nRest = rest.size,
-            cap = paid.lastOrNull()?.bal ?: c.montant,
+            m = p.m, err = p.err, rows = p.rows, nPaid = paid.size, nRest = rest.size, cap = cap,
             itPaid = r2(paid.sumOf { it.it }), itRest = r2(rest.sumOf { it.it }), itTot = r2(p.rows.sumOf { it.it }),
             totPay = r2(p.rows.sumOf { it.pay }), fin = p.rows.lastOrNull()?.ym ?: c.debut, prochaine = rest.firstOrNull(),
         )
@@ -232,25 +262,52 @@ object Logic {
     data class Totaux(val cap: Double, val mens: Double, val itRest: Double, val fin: String)
     fun crTotaux(s: St, today: LocalDate): Totaux {
         var cap = 0.0; var mens = 0.0; var it = 0.0; var fin = ""
-        s.cred.forEach { c -> val e = crEtat(c, today); if (e.nRest > 0) { cap += e.cap; mens += e.m; it += e.itRest; if (e.fin > fin) fin = e.fin } }
+        s.cred.forEach { c -> val e = crEtat(c, today); if (e.nRest > 0 || e.cap > 0.004) { cap += e.cap; if (e.nRest > 0) { mens += e.m; it += e.itRest; if (e.fin > fin) fin = e.fin } } }
         return Totaux(r2(cap), r2(mens), r2(it), fin)
     }
 
-    /** récurrente du crédit : créée, mise à jour, arrêtée à la dernière échéance */
+    /** récurrente du crédit : créée, mise à jour, arrêtée à la dernière échéance (renouvelable : inactive si rien à rembourser) */
     fun saveCredit(s: St, c0: Cred, now: Long): St {
-        val p = crPlan(c0); if (p.rows.isEmpty()) return s
-        val c = if (c0.duree <= 0) c0.copy(duree = p.rows.size) else c0
+        val p = crPlan(c0); if (p.err != null || (p.rows.isEmpty() && !c0.renouv)) return s
+        val c = if (c0.duree <= 0 && !c0.renouv) c0.copy(duree = p.rows.size) else c0
         val old = s.rec.find { it.id == c.recId }
         val rid = old?.id ?: "r$now"
         val r = Rec(
             id = rid, libelle = c.nom, montant = p.m, sens = DEBIT, categorie = Cats.CREDITS, jour = c.jour,
-            createdAt = old?.createdAt ?: now, debut = c.debut, fin = p.rows.last().ym, credId = c.id,
+            createdAt = old?.createdAt ?: now, debut = c.debut, fin = p.rows.lastOrNull()?.ym ?: prevM(c.debut), credId = c.id,
         )
         val cc = c.copy(recId = rid)
         val creds = if (s.cred.any { it.id == c.id }) s.cred.map { if (it.id == c.id) cc else it } else s.cred + cc
         val recs = if (old != null) s.rec.map { if (it.id == rid) r else it } else s.rec + r
         return s.copy(cred = creds, rec = recs)
     }
+
+    /** première échéance strictement après une date */
+    fun echeanceApres(c: Cred, d: String): String { var y = d.take(7); if (dayOf(y, c.jour) <= d) y = nextM(y); return if (y < c.debut) c.debut else y }
+
+    /** nouvelle mensualité d'un renouvelable à partir de la prochaine échéance */
+    fun setMensu(c: Cred, v: Double, apres: String): Cred {
+        if (kotlin.math.abs(mensuActuelle(c) - v) < 0.005) return c
+        val y = echeanceApres(c, apres)
+        return if (y <= c.debut && c.mensuHist.isEmpty()) c.copy(mensu = r2(v)) else c.copy(mensuHist = c.mensuHist.filter { it.first != y } + (y to r2(v)))
+    }
+
+    /** pioche dans un renouvelable : l'argent arrive en entrée sur le compte */
+    fun addTirage(s: St, credId: String, date: String, montant: Double, mensu: Double, now: Long): St {
+        val c = s.cred.find { it.id == credId } ?: return s
+        val id = nextId(s)
+        val tx = Tx(id, date, "Tirage " + c.nom, r2(montant), Cats.CREDITS, CREDIT, carte = false)
+        val c2 = setMensu(c.copy(tirages = c.tirages + Tirage(date, r2(montant), id)), mensu, date)
+        return saveCredit(s.copy(tx = s.tx + tx), c2, now)
+    }
+
+    fun delTirage(s: St, credId: String, t: Tirage, now: Long): St {
+        val c = s.cred.find { it.id == credId } ?: return s
+        return saveCredit(s.copy(tx = s.tx.filter { it.id != t.txId }), c.copy(tirages = c.tirages - t), now)
+    }
+
+    /** entrée comptée comme revenu (un tirage de crédit n'en est pas un) */
+    fun isRevenu(s: St, t: Tx) = t.sens == CREDIT && cat(s, t) != Cats.CREDITS
 
     fun delCredit(s: St, id: String): St {
         val c = s.cred.find { it.id == id } ?: return s
@@ -278,7 +335,7 @@ object Logic {
         val cur = parCatAll(ym); val prev = parCatAll(prevM(ym))
         val ec = (cur.keys + prev.keys).map { Ecart(it, cur[it] ?: 0.0, prev[it] ?: 0.0) }.filter { abs(it.diff) >= 5 }
         return Bilan(
-            ym = ym, rev = r2(tx.filter { it.sens == CREDIT }.sumOf { it.montant }), dep = r2(tx.filter { it.sens == DEBIT }.sumOf { it.montant }),
+            ym = ym, rev = r2(tx.filter { isRevenu(s, it) }.sumOf { it.montant }), dep = r2(tx.filter { it.sens == DEBIT }.sumOf { it.montant }),
             nb = tx.size, soldeFin = soldeFinMois(s, ym, today),
             hausses = ec.filter { it.diff > 0 }.sortedByDescending { it.diff }.take(3),
             baisses = ec.filter { it.diff < 0 }.sortedBy { it.diff }.take(3),

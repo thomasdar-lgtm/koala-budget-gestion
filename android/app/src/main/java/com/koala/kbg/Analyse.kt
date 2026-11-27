@@ -128,7 +128,7 @@ private fun SoldeTab() {
 private fun MoisTab() {
     val s = Db.s
     val ms = Logic.lastMonths(6, Db.today)
-    val cr = ms.map { m -> s.tx.filter { it.mois == m && it.sens == CREDIT }.sumOf { it.montant } }
+    val cr = ms.map { m -> s.tx.filter { it.mois == m && Logic.isRevenu(s, it) }.sumOf { it.montant } }
     val db = ms.map { m -> s.tx.filter { it.mois == m && it.sens == DEBIT }.sumOf { it.montant } }
     Card {
         Row(Modifier.padding(bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {

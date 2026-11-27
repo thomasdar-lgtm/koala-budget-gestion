@@ -42,7 +42,7 @@ fun HomeScreen() {
     val s = Db.s; val today = Db.today; val ym = Logic.ym(today)
     val so = Logic.calcSoldes(s, ym, today)
     val txM = s.tx.filter { it.mois == ym }
-    val rev = txM.filter { it.sens == CREDIT }.sumOf { it.montant }
+    val rev = txM.filter { Logic.isRevenu(s, it) }.sumOf { it.montant }
     val dep = txM.filter { it.sens == DEBIT }.sumOf { it.montant }
     val jours = Logic.dim(ym); val day = today.dayOfMonth
     val en = Logic.encours(s, Logic.ds(today)); val cr = Logic.crTotaux(s, today)
@@ -268,6 +268,25 @@ fun PokeScreen() {
 
 // ═══ CRÉDITS ═══════════════════════════════════════════════
 @Composable
+/** carte d'un crédit renouvelable : utilisé / plafond, disponible */
+@Composable
+private fun RevCard(c: Cred, e: Logic.Etat) {
+    val pct = if (c.plafond > 0) (e.cap / c.plafond).toFloat().coerceIn(0f, 1f) else 0f
+    Card(Modifier.clickable { Nav.open(Sheet.CreditDetail(c.id)) }) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
+            T(c.nom, 15.sp, K.Tx, FontWeight.Bold, Modifier.weight(1f, fill = false), lines = 1)
+            T("  RENOUVELABLE", 9.5.sp, K.HeroLbl, FontWeight.Bold, Modifier.weight(1f))
+            if (e.nRest > 0) { T(Logic.fmt(e.m), 14.sp, K.Tx, FontWeight.ExtraBold); T(" / mois", 11.sp, K.Tx3) }
+        }
+        Bar(pct, Brush.horizontalGradient(listOf(K.Or, K.Re)))
+        Spacer(Modifier.height(8.dp))
+        Row { T("Utilisé ", 12.sp, K.Tx2); T(Logic.fmt(e.cap), 12.sp, K.Tx, FontWeight.Bold); T(" / " + Logic.fmt(c.plafond), 12.sp, K.Tx2, modifier = Modifier.weight(1f))
+            T("Dispo ", 12.sp, K.Tx2); T(Logic.fmt(maxOf(0.0, c.plafond - e.cap)), 12.sp, K.Gr, FontWeight.Bold) }
+        if (e.nRest > 0) { Spacer(Modifier.height(3.dp)); T("Remboursé en ${Logic.fmtM(e.fin)} sans nouveau tirage", 12.sp, K.Tx2) }
+    }
+}
+
+@Composable
 fun CreditsScreen() {
     val s = Db.s; val today = Db.today; val t = Logic.crTotaux(s, today)
     Page {
@@ -283,8 +302,9 @@ fun CreditsScreen() {
         }
         if (s.cred.isEmpty()) Card { Empty("🏛️", "Aucun crédit") }
         s.cred.map { it to Logic.crEtat(it, today) }
-            .sortedWith(compareBy<Pair<Cred, Logic.Etat>> { if (it.second.nRest > 0) 0 else 1 }.thenBy { it.second.fin })
+            .sortedWith(compareBy<Pair<Cred, Logic.Etat>> { if (it.second.nRest > 0 || it.first.renouv) 0 else 1 }.thenBy { it.second.fin })
             .forEach { (c, e) ->
+                if (c.renouv) { RevCard(c, e); return@forEach }
                 val fini = e.nRest == 0
                 val pct = if (c.montant > 0) ((1 - e.cap / c.montant) * 100).toInt().coerceIn(0, 100) else 0
                 Card(Modifier.clickable { Nav.open(Sheet.CreditDetail(c.id)) }) {
