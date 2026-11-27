@@ -567,10 +567,7 @@ internal fun TirageSheet(credId: String) {
     Field(mt, { mt = it }, "Montant (€)", number = true, big = true, placeholder = "0,00")
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
         DateField("Date", date, Modifier.weight(1f)) { date = it }
-        Column(Modifier.weight(1f)) {
-            T("Nouvelle mensualité", 11.sp, K.Tx3, modifier = Modifier.padding(bottom = 4.dp))
-            Field(mens, { mens = it }, "€", number = true)
-        }
+        Field(mens, { mens = it }, "Mensualité (€)", Modifier.weight(1f).padding(top = 9.dp), number = true)
     }
     val v = num(mt)
     if (v != null && v > 0) {
