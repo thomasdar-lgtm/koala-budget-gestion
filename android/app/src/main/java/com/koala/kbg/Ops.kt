@@ -8,7 +8,6 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,7 +15,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -41,7 +39,11 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -216,19 +218,32 @@ private fun SensPill(sens: String, onChange: (String) -> Unit) {
     }
 }
 
-/** grand montant centré */
+/** grand montant centré, « € » ajouté à l'affichage */
+private object Euro : VisualTransformation {
+    override fun filter(text: AnnotatedString): TransformedText {
+        val out = AnnotatedString(text.text + " €")
+        return TransformedText(out, object : OffsetMapping {
+            override fun originalToTransformed(offset: Int) = offset
+            override fun transformedToOriginal(offset: Int) = minOf(offset, text.length)
+        })
+    }
+}
+
 @Composable
 private fun Montant(v: String, col: Color, focus: FocusRequester? = null, onChange: (String) -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 14.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-        BasicTextField(
-            value = v, onValueChange = { n -> onChange(n.filter { it.isDigit() || it == ',' || it == '.' }) }, singleLine = true,
-            textStyle = TextStyle(fontSize = 44.sp, fontWeight = FontWeight.ExtraBold, color = col, textAlign = TextAlign.End),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), cursorBrush = SolidColor(col),
-            modifier = Modifier.widthIn(min = 40.dp).width(IntrinsicSize.Min).then(if (focus != null) Modifier.focusRequester(focus) else Modifier),
-            decorationBox = { inner -> Box { if (v.isEmpty()) T("0", 44.sp, col.copy(alpha = 0.35f), FontWeight.ExtraBold); inner() } },
-        )
-        T(" €", 34.sp, col.copy(alpha = 0.7f), FontWeight.Bold)
-    }
+    BasicTextField(
+        value = v, onValueChange = { n -> onChange(n.filter { it.isDigit() || it == ',' || it == '.' }) }, singleLine = true,
+        textStyle = TextStyle(fontSize = 44.sp, fontWeight = FontWeight.ExtraBold, color = col, textAlign = TextAlign.Center),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), cursorBrush = SolidColor(col),
+        visualTransformation = Euro,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp).then(if (focus != null) Modifier.focusRequester(focus) else Modifier),
+        decorationBox = { inner ->
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                if (v.isEmpty()) T("0 €", 44.sp, col.copy(alpha = 0.35f), FontWeight.ExtraBold, align = TextAlign.Center)
+                inner()
+            }
+        },
+    )
 }
 
 /** catégories en tuiles (4 par ligne) */
