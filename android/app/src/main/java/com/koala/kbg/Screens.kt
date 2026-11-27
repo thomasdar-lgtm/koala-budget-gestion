@@ -267,7 +267,6 @@ fun PokeScreen() {
 }
 
 // ═══ CRÉDITS ═══════════════════════════════════════════════
-@Composable
 /** carte d'un crédit renouvelable : utilisé / plafond, disponible */
 @Composable
 private fun RevCard(c: Cred, e: Logic.Etat) {
