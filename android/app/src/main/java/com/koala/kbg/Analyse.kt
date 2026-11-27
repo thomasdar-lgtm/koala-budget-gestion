@@ -235,7 +235,7 @@ private fun HistoTab() {
     Field(q, { q = it; page = 1 }, "🔍 Rechercher…")
     val months = s.tx.map { it.mois }.distinct().sortedDescending()
     Pills(listOf("" to "Tous les mois") + months.map { it to Logic.fmtM(it) }, mo) { mo = it; page = 1 }
-    Pills(listOf("" to "Toutes catégories") + Cats.ALL.map { it to (if (it == Cats.POKE) "🃏" else Cats.ico(it)) + " " + it }, ca) { ca = it; page = 1 }
+    Pills(listOf("" to "Toutes catégories") + Cats.ALL.map { it to (if (it == Cats.POKE) "" else Cats.ico(it) + " ") + it }, ca) { ca = it; page = 1 }
     Seg(listOf("" to "Tout", DEBIT to "Dépenses", CREDIT to "Entrées"), se) { se = it; page = 1 }
     val f = s.tx.filter {
         (q.isBlank() || it.libelle.contains(q.trim(), ignoreCase = true)) && (mo.isEmpty() || it.mois == mo) &&

@@ -95,5 +95,6 @@ class ScreensShot {
         Nav.lot = listOf(Db.Lot(java.io.File(d, "0.pdf"), "Bulletin_novembre_2026.pdf", "2026-11"), Db.Lot(java.io.File(d, "1.pdf"), "BS_2026-10.pdf", "2026-10"),
             Db.Lot(java.io.File(d, "2.pdf"), "scan_0042.pdf", null))
         paparazzi.snapshot("18_paie_lot") { KbgTheme { Column(Modifier.fillMaxSize().background(K.Sf).padding(18.dp)) { PaieLotSheet() } } }; Nav.lot = emptyList() }
+    @Test fun pokeVide() { Nav.pokeYM = "2026-08"; Db.preview(sample(), day); Nav.tab = "pokemon"; paparazzi.snapshot("19_poke_vide") { Frame { PokeScreen() } } }
     @Test fun solde() = shot("10_solde") { SheetFrame { SoldeSheet() } }
 }

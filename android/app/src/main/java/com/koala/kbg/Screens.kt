@@ -260,7 +260,7 @@ fun PokeScreen() {
         }
         MonthNav(ym) { Nav.pokeYM = it }
         Card(pad = 12.dp) {
-            if (txs.isEmpty()) Empty("🃏", "Aucune dépense Pokémon ce mois")
+            if (txs.isEmpty()) Empty("", "Aucune dépense Pokémon ce mois", R.drawable.nav_poke)
             txs.forEachIndexed { i, t -> if (i > 0) Divider(); TxRow(s, t) { Nav.open(Sheet.EditTx(t.id)) } }
         }
     }

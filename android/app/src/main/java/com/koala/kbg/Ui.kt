@@ -208,9 +208,10 @@ fun Pointe(t: Tx) {
 fun Divider() = Box(Modifier.fillMaxWidth().height(1.dp).background(K.Bd))
 
 @Composable
-fun Empty(ico: String, s: String) =
+fun Empty(ico: String, s: String, res: Int? = null) =
     Column(Modifier.fillMaxWidth().padding(vertical = 26.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        T(ico, 30.sp); Spacer(Modifier.height(6.dp)); T(s, 13.sp, K.Tx2, align = TextAlign.Center)
+        if (res != null) Image(painterResource(res), null, Modifier.size(44.dp)) else T(ico, 30.sp)
+        Spacer(Modifier.height(6.dp)); T(s, 13.sp, K.Tx2, align = TextAlign.Center)
     }
 
 /** case à cocher carrée verte */
