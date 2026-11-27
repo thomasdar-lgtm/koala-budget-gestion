@@ -1,0 +1,1 @@
+<testsuite name="com.koala.kbg.ScreensShot" tests="24" skipped="0" failures="0" errors="0" timestamp="2026-11-27T18:55:25.676Z" hostname="runnervm3lb7s" time="10.077">
